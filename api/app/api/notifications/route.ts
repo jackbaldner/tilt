@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const notifications = all<any>(
+  const notifications = await all<any>(
     "SELECT * FROM Notification WHERE userId = ? ORDER BY createdAt DESC LIMIT 50",
     [auth.id]
   );
@@ -24,13 +24,12 @@ export async function PATCH(req: NextRequest) {
   if (isAuthError(auth)) return auth;
 
   const { ids, all: markAll } = await req.json();
-  const timestamp = now();
 
   if (markAll) {
-    run("UPDATE Notification SET read = 1 WHERE userId = ?", [auth.id]);
+    await run("UPDATE Notification SET read = 1 WHERE userId = ?", [auth.id]);
   } else if (ids?.length) {
     for (const id of ids) {
-      run("UPDATE Notification SET read = 1 WHERE id = ? AND userId = ?", [id, auth.id]);
+      await run("UPDATE Notification SET read = 1 WHERE id = ? AND userId = ?", [id, auth.id]);
     }
   }
 

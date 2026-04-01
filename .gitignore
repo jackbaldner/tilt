@@ -37,3 +37,6 @@ Thumbs.db
 # Build
 build/
 dist/
+
+# Claude worktrees
+.claude/worktrees/

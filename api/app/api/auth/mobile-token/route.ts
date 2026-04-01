@@ -15,39 +15,36 @@ interface UserRow {
 // POST /api/auth/mobile-token — create/login user, get JWT
 export async function POST(req: NextRequest) {
   try {
-    const { email, name, image, googleId } = await req.json();
+    const { email, name, image } = await req.json();
 
     if (!email) {
       return NextResponse.json({ error: "Email required" }, { status: 400 });
     }
 
     // Upsert user
-    let user = one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE email = ?", [email]);
+    let user = await one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE email = ?", [email]);
 
     if (!user) {
       const id = cuid();
       const timestamp = now();
-      run(
+      await run(
         `INSERT INTO User (id, email, name, image, chips, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1000, ?, ?)`,
         [id, email, name ?? null, image ?? null, timestamp, timestamp]
       );
-      // Create user stats
-      run(
+      await run(
         `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
         [cuid(), id, timestamp]
       );
-      user = one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE id = ?", [id]);
+      user = await one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE id = ?", [id]);
     } else {
-      // Update name/image if provided
       if (name || image) {
-        run(
+        await run(
           `UPDATE User SET name = COALESCE(?, name), image = COALESCE(?, image), updatedAt = ? WHERE id = ?`,
           [name ?? null, image ?? null, now(), user.id]
         );
-        user = one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE id = ?", [user.id]);
+        user = await one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE id = ?", [user.id]);
       }
-      // Ensure stats exist
-      run(
+      await run(
         `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
         [cuid(), user!.id, now()]
       );
@@ -57,7 +54,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
     }
 
-    // Issue JWT (90 day expiry)
     const token = sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: "90d" });
 
     return NextResponse.json({ token, user });
@@ -78,7 +74,7 @@ export async function GET(req: NextRequest) {
     const token = authHeader.slice(7);
     const payload = verify(token, JWT_SECRET) as { sub: string };
 
-    const user = one<UserRow>(
+    const user = await one<UserRow>(
       "SELECT id, email, name, image, chips FROM User WHERE id = ?",
       [payload.sub]
     );

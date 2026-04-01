@@ -30,7 +30,7 @@ export async function requireAuth(req: NextRequest): Promise<AuthUser | NextResp
     const token = authHeader.slice(7);
     const payload = verify(token, JWT_SECRET) as { sub: string };
 
-    const user = one<UserRow>(
+    const user = await one<UserRow>(
       "SELECT id, email, name, image, chips FROM User WHERE id = ?",
       [payload.sub]
     );

@@ -1,9 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Exclude native modules from serverless bundle — only used in local dev
+  serverExternalPackages: ["better-sqlite3"],
   // Allow images from Google and other OAuth providers
   images: {
-    domains: ["lh3.googleusercontent.com", "avatars.githubusercontent.com"],
+    remotePatterns: [
+      { hostname: "lh3.googleusercontent.com" },
+      { hostname: "avatars.githubusercontent.com" },
+    ],
   },
   // CORS headers for mobile app
   async headers() {

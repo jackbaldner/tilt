@@ -7,7 +7,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (isAuthError(auth)) return auth;
   const { id: circleId } = await params;
 
-  const membership = one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
+  const membership = await one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
   if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
   const url = new URL(req.url);
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     whereClause += " AND b.resolution IN ('resolved', 'cancelled', 'void')";
   }
 
-  const bets = all<any>(
+  const bets = await all<any>(
     `SELECT b.*, u.name as proposerName, u.image as proposerImage,
      (SELECT COUNT(*) FROM Comment c WHERE c.betId = b.id) as commentCount
      FROM Bet b JOIN User u ON u.id = b.proposerId
@@ -31,8 +31,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     [...queryParams, limit]
   );
 
-  const enriched = bets.map((b: any) => {
-    const sides = all<any>(
+  const enriched = await Promise.all(bets.map(async (b: any) => {
+    const sides = await all<any>(
       `SELECT bs.*, u.id as userId, u.name as userName, u.image as userImage
        FROM BetSide bs JOIN User u ON u.id = bs.userId WHERE bs.betId = ?`,
       [b.id]
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       sides: sides.map((s: any) => ({ ...s, user: { id: s.userId, name: s.userName, image: s.userImage } })),
       _count: { comments: b.commentCount },
     };
-  });
+  }));
 
   return NextResponse.json({ bets: enriched });
 }

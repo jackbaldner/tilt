@@ -9,10 +9,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (isAuthError(auth)) return auth;
   const { id: circleId } = await params;
 
-  const circle = one<any>("SELECT id, inviteCode, ownerId FROM Circle WHERE id = ?", [circleId]);
+  const circle = await one<any>("SELECT id, inviteCode, ownerId FROM Circle WHERE id = ?", [circleId]);
   if (!circle) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const membership = one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
+  const membership = await one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
   if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
   return NextResponse.json({
@@ -26,12 +26,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (isAuthError(auth)) return auth;
   const { id: circleId } = await params;
 
-  const circle = one<any>("SELECT * FROM Circle WHERE id = ?", [circleId]);
+  const circle = await one<any>("SELECT * FROM Circle WHERE id = ?", [circleId]);
   if (!circle) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (circle.ownerId !== auth.id) return NextResponse.json({ error: "Not owner" }, { status: 403 });
 
   const newCode = cuid();
-  run("UPDATE Circle SET inviteCode = ? WHERE id = ?", [newCode, circleId]);
+  await run("UPDATE Circle SET inviteCode = ? WHERE id = ?", [newCode, circleId]);
 
   return NextResponse.json({
     inviteCode: newCode,

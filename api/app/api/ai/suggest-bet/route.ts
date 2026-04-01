@@ -13,14 +13,14 @@ export async function POST(req: NextRequest) {
 
   const { circleId, context } = await req.json();
 
-  const circle = one<any>("SELECT * FROM Circle WHERE id = ?", [circleId]);
+  const circle = await one<any>("SELECT * FROM Circle WHERE id = ?", [circleId]);
   if (!circle) return NextResponse.json({ error: "Circle not found" }, { status: 404 });
 
-  const members = all<any>(
+  const members = await all<any>(
     "SELECT u.name FROM CircleMember cm JOIN User u ON u.id = cm.userId WHERE cm.circleId = ?",
     [circleId]
   );
-  const recentBets = all<any>(
+  const recentBets = await all<any>(
     "SELECT title, type FROM Bet WHERE circleId = ? ORDER BY createdAt DESC LIMIT 5",
     [circleId]
   );

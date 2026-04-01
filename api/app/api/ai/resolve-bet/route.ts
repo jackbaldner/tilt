@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const { betId } = await req.json();
   if (!betId) return NextResponse.json({ error: "Bet ID required" }, { status: 400 });
 
-  const bet = one<any>("SELECT * FROM Bet WHERE id = ?", [betId]);
+  const bet = await one<any>("SELECT * FROM Bet WHERE id = ?", [betId]);
   if (!bet) return NextResponse.json({ error: "Bet not found" }, { status: 404 });
 
   const options = JSON.parse(bet.options) as string[];

@@ -7,13 +7,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (isAuthError(auth)) return auth;
   const { id: circleId } = await params;
 
-  const membership = one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
+  const membership = await one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
   if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
   const url = new URL(req.url);
   const limit = parseInt(url.searchParams.get("limit") ?? "30");
 
-  const activities = all<any>(
+  const activities = await all<any>(
     `SELECT a.*, b.id as betId, b.title as betTitle
      FROM Activity a
      LEFT JOIN Bet b ON b.id = a.betId

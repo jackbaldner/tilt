@@ -7,23 +7,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (isAuthError(auth)) return auth;
   const { id } = await params;
 
-  const bet = one<any>("SELECT * FROM Bet WHERE id = ?", [id]);
+  const bet = await one<any>("SELECT * FROM Bet WHERE id = ?", [id]);
   if (!bet) return NextResponse.json({ error: "Bet not found" }, { status: 404 });
 
-  const membership = one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [bet.circleId, auth.id]);
+  const membership = await one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [bet.circleId, auth.id]);
   if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
-  const sides = all<any>(
+  const sides = await all<any>(
     "SELECT bs.*, u.id as userId, u.name as userName, u.image as userImage FROM BetSide bs JOIN User u ON u.id = bs.userId WHERE bs.betId = ?",
     [id]
   );
-  const comments = all<any>(
+  const comments = await all<any>(
     "SELECT c.*, u.id as userId, u.name as userName, u.image as userImage FROM Comment c JOIN User u ON u.id = c.userId WHERE c.betId = ? ORDER BY c.createdAt ASC",
     [id]
   );
-  const proposer = one<any>("SELECT id, name, image FROM User WHERE id = ?", [bet.proposerId]);
-  const circle = one<any>("SELECT id, name, emoji FROM Circle WHERE id = ?", [bet.circleId]);
-  const disputes = all<any>("SELECT * FROM Dispute WHERE betId = ?", [id]);
+  const proposer = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [bet.proposerId]);
+  const circle = await one<any>("SELECT id, name, emoji FROM Circle WHERE id = ?", [bet.circleId]);
+  const disputes = await all<any>("SELECT * FROM Dispute WHERE betId = ?", [id]);
 
   return NextResponse.json({
     bet: {

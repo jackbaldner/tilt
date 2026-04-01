@@ -1,21 +1,7 @@
-import Database from "better-sqlite3";
 import { randomUUID } from "crypto";
 
-const DB_PATH = "/Users/jackbaldner/tilt/api/prisma/dev.db";
+// ─── ID & time helpers ────────────────────────────────────────────────────────
 
-// Singleton DB connection
-const globalForDb = globalThis as unknown as { db: Database.Database | undefined };
-
-export function getDb(): Database.Database {
-  if (!globalForDb.db) {
-    globalForDb.db = new Database(DB_PATH);
-    globalForDb.db.pragma("journal_mode = WAL");
-    globalForDb.db.pragma("foreign_keys = ON");
-  }
-  return globalForDb.db;
-}
-
-// Helper to generate cuid-compatible IDs
 export function cuid() {
   return randomUUID().replace(/-/g, "").slice(0, 25);
 }
@@ -24,27 +10,143 @@ export function now() {
   return new Date().toISOString();
 }
 
-// Type-safe query helpers
-export function one<T>(sql: string, params?: any[]): T | null {
-  const db = getDb();
+// ─── Database abstraction ─────────────────────────────────────────────────────
+//
+// • Local dev   → better-sqlite3 (synchronous, file-based)
+// • Production  → @libsql/client (async, Turso/libSQL remote)
+//
+// The public API is synchronous-looking (one/all/run/transaction) in both
+// modes because Next.js route handlers can be async and we always await the
+// libSQL client calls before returning.
+
+const USE_TURSO = Boolean(process.env.TURSO_DATABASE_URL);
+
+// ─── libSQL (Turso) path ──────────────────────────────────────────────────────
+
+let libsqlClient: import("@libsql/client").Client | null = null;
+
+async function getLibsqlClient() {
+  if (!libsqlClient) {
+    const { createClient } = await import("@libsql/client");
+    libsqlClient = createClient({
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+  }
+  return libsqlClient;
+}
+
+// ─── better-sqlite3 (local) path ─────────────────────────────────────────────
+
+const DB_PATH = process.env.SQLITE_PATH ?? "/Users/jackbaldner/tilt/api/prisma/dev.db";
+
+let localDb: import("better-sqlite3").Database | null = null;
+
+function getLocalDb() {
+  if (!localDb) {
+    // Dynamic require so the module is never loaded when running on Turso
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Database = require("better-sqlite3");
+    localDb = new Database(DB_PATH);
+    (localDb as any).pragma("journal_mode = WAL");
+    (localDb as any).pragma("foreign_keys = ON");
+  }
+  return localDb as import("better-sqlite3").Database;
+}
+
+// ─── Public helpers ───────────────────────────────────────────────────────────
+
+export async function one<T>(sql: string, params?: unknown[]): Promise<T | null> {
+  if (USE_TURSO) {
+    const client = await getLibsqlClient();
+    const res = await client.execute({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+    if (res.rows.length === 0) return null;
+    return rowToObject<T>(res.columns, res.rows[0]);
+  }
+  const db = getLocalDb();
   const stmt = db.prepare(sql);
   return (params ? stmt.get(...params) : stmt.get()) as T | null;
 }
 
-export function all<T>(sql: string, params?: any[]): T[] {
-  const db = getDb();
+export async function all<T>(sql: string, params?: unknown[]): Promise<T[]> {
+  if (USE_TURSO) {
+    const client = await getLibsqlClient();
+    const res = await client.execute({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+    return res.rows.map((row) => rowToObject<T>(res.columns, row));
+  }
+  const db = getLocalDb();
   const stmt = db.prepare(sql);
   return (params ? stmt.all(...params) : stmt.all()) as T[];
 }
 
-export function run(sql: string, params?: any[]): Database.RunResult {
-  const db = getDb();
+export async function run(sql: string, params?: unknown[]): Promise<void> {
+  if (USE_TURSO) {
+    const client = await getLibsqlClient();
+    await client.execute({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+    return;
+  }
+  const db = getLocalDb();
   const stmt = db.prepare(sql);
-  return params ? stmt.run(...params) : stmt.run();
+  params ? stmt.run(...params) : stmt.run();
 }
 
-export function transaction<T>(fn: (db: Database.Database) => T): T {
-  const db = getDb();
-  const t = db.transaction(fn);
-  return t(db);
+export async function transaction<T>(fn: (helpers: {
+  run: (sql: string, params?: unknown[]) => void;
+  one: <R>(sql: string, params?: unknown[]) => R | null;
+  all: <R>(sql: string, params?: unknown[]) => R[];
+}) => T): Promise<T> {
+  if (USE_TURSO) {
+    const client = await getLibsqlClient();
+    // Collect statements then execute as a batch
+    const statements: Array<{ sql: string; args: import("@libsql/client").InValue[] }> = [];
+    let result: T;
+
+    // We run fn synchronously collecting statements, then batch-execute
+    const helpers = {
+      run: (sql: string, params?: unknown[]) => {
+        statements.push({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+      },
+      one: <R>(_sql: string, _params?: unknown[]): R | null => null, // reads inside transactions not supported in batch mode
+      all: <R>(_sql: string, _params?: unknown[]): R[] => [],
+    };
+    result = fn(helpers);
+    if (statements.length > 0) {
+      await client.batch(statements, "write");
+    }
+    return result;
+  }
+
+  // better-sqlite3: synchronous transaction
+  const db = getLocalDb();
+  const helpers = {
+    run: (sql: string, params?: unknown[]) => {
+      db.prepare(sql).run(...(params ?? []));
+    },
+    one: <R>(sql: string, params?: unknown[]): R | null => {
+      const stmt = db.prepare(sql);
+      return (params ? stmt.get(...params) : stmt.get()) as R | null;
+    },
+    all: <R>(sql: string, params?: unknown[]): R[] => {
+      const stmt = db.prepare(sql);
+      return (params ? stmt.all(...params) : stmt.all()) as R[];
+    },
+  };
+
+  const t = db.transaction((h: typeof helpers) => fn(h));
+  return t(helpers);
+}
+
+// ─── Internal ─────────────────────────────────────────────────────────────────
+
+function rowToObject<T>(columns: string[], row: import("@libsql/client").Row): T {
+  const obj: Record<string, unknown> = {};
+  columns.forEach((col, i) => {
+    obj[col] = row[i];
+  });
+  return obj as T;
+}
+
+// Legacy: expose getDb for any code that called it directly (local only)
+export function getDb() {
+  return getLocalDb();
 }
