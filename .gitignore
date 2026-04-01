@@ -1,0 +1,39 @@
+# Node
+node_modules/
+npm-debug.log*
+.npm
+
+# Next.js
+.next/
+out/
+.vercel
+
+# Expo
+mobile/.expo/
+mobile/dist/
+mobile/.DS_Store
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Env
+.env
+.env.local
+.env.*.local
+api/.env
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+dist/

@@ -1,0 +1,17 @@
+{
+  "name": "tilt",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "api",
+    "mobile"
+  ],
+  "scripts": {
+    "api": "cd api && npm run dev",
+    "mobile": "cd mobile && npx expo start",
+    "dev": "concurrently \"npm run api\" \"npm run mobile\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

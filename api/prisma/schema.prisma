@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  username      String?   @unique
+  chips         Int       @default(1000)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+
+  ownedCircles   Circle[]         @relation("CircleOwner")
+  memberships    CircleMember[]
+  proposedBets   Bet[]            @relation("BetProposer")
+  betSides       BetSide[]
+  transactions   Transaction[]
+  comments       Comment[]
+  invitesSent    CircleInvite[]   @relation("InviteSender")
+  notifications  Notification[]
+  stats          UserStats?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Circle {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  emoji       String   @default("🎯")
+  inviteCode  String   @unique @default(cuid())
+  ownerId     String
+  isPremium   Boolean  @default(false)
+  theme       String   @default("emerald")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User           @relation("CircleOwner", fields: [ownerId], references: [id])
+  members     CircleMember[]
+  bets        Bet[]
+  invites     CircleInvite[]
+  activities  Activity[]
+}
+
+model CircleMember {
+  id        String   @id @default(cuid())
+  circleId  String
+  userId    String
+  role      String   @default("member")
+  chips     Int      @default(0)
+  joinedAt  DateTime @default(now())
+
+  circle    Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([circleId, userId])
+}
+
+model CircleInvite {
+  id         String   @id @default(cuid())
+  circleId   String
+  senderId   String
+  email      String?
+  code       String   @unique @default(cuid())
+  used       Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  circle     Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  sender     User     @relation("InviteSender", fields: [senderId], references: [id])
+}
+
+model Bet {
+  id              String      @id @default(cuid())
+  circleId        String
+  proposerId      String
+  title           String
+  description     String?
+  type            String
+  stake           Int
+  options         String
+  resolveAt       DateTime?
+  resolvedAt      DateTime?
+  resolvedOption  String?
+  resolution      String      @default("pending")
+  resolutionNote  String?
+  aiResolvable    Boolean     @default(false)
+  aiResolutionUrl String?
+  totalPot        Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  circle          Circle      @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  proposer        User        @relation("BetProposer", fields: [proposerId], references: [id])
+  sides           BetSide[]
+  comments        Comment[]
+  transactions    Transaction[]
+  activities      Activity[]
+  disputes        Dispute[]
+}
+
+model BetSide {
+  id        String   @id @default(cuid())
+  betId     String
+  userId    String
+  option    String
+  stake     Int
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  bet       Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([betId, userId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  betId       String?
+  type        String
+  amount      Int
+  description String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  bet         Bet?     @relation(fields: [betId], references: [id])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  betId     String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  bet       Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Dispute {
+  id         String   @id @default(cuid())
+  betId      String
+  raisedById String
+  reason     String
+  votes      String   @default("{}")
+  resolved   Boolean  @default(false)
+  outcome    String?
+  createdAt  DateTime @default(now())
+
+  bet        Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  circleId  String
+  betId     String?
+  userId    String?
+  type      String
+  data      String   @default("{}")
+  createdAt DateTime @default(now())
+
+  circle    Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  bet       Bet?     @relation(fields: [betId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      String   @default("{}")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserStats {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  totalBets      Int      @default(0)
+  wonBets        Int      @default(0)
+  lostBets       Int      @default(0)
+  totalChipsWon  Int      @default(0)
+  totalChipsLost Int      @default(0)
+  biggestWin     Int      @default(0)
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
