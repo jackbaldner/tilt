@@ -1,10 +1,6 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: path.resolve(__dirname),
-  },
   // Exclude native modules from serverless bundle — only used in local dev
   serverExternalPackages: ["better-sqlite3"],
   // Allow images from Google and other OAuth providers
