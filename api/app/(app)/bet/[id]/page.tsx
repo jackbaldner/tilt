@@ -1,0 +1,469 @@
+"use client";
+
+import { useState, useEffect, useCallback, use } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, useApiClient } from "@/app/providers";
+
+interface BetUser {
+  id: string;
+  name: string;
+  image?: string;
+}
+
+interface BetSide {
+  id: string;
+  userId: string;
+  option: string;
+  stake: number;
+  status: string;
+  user: BetUser;
+}
+
+interface Comment {
+  id: string;
+  text: string;
+  createdAt: string;
+  user: BetUser;
+}
+
+interface Dispute {
+  id: string;
+  reason: string;
+  resolved: boolean;
+  outcome?: string;
+}
+
+interface Bet {
+  id: string;
+  title: string;
+  description?: string;
+  type: string;
+  stake: number;
+  totalPot: number;
+  resolution: string;
+  resolvedOption?: string;
+  resolutionNote?: string;
+  createdAt: string;
+  resolveAt?: string;
+  options: string[];
+  proposer: BetUser;
+  circle: { id: string; name: string; emoji: string };
+  sides: BetSide[];
+  comments: Comment[];
+  disputes: Dispute[];
+}
+
+function Avatar({ user, size = "md" }: { user: BetUser; size?: "sm" | "md" | "lg" }) {
+  const sizes = { sm: "w-7 h-7 text-xs", md: "w-9 h-9 text-sm", lg: "w-12 h-12 text-base" };
+  if (user.image) {
+    return <img src={user.image} alt={user.name} className={`${sizes[size]} rounded-full object-cover`} />;
+  }
+  return (
+    <div className={`${sizes[size]} rounded-full bg-accent/20 flex items-center justify-center font-bold text-accent flex-shrink-0`}>
+      {user.name?.[0]?.toUpperCase() ?? "?"}
+    </div>
+  );
+}
+
+export default function BetPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: betId } = use(params);
+  const { user, refreshUser } = useAuth();
+  const { authFetch } = useApiClient();
+  const router = useRouter();
+
+  const [bet, setBet] = useState<Bet | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [comment, setComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+  const [joining, setJoining] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveOption, setResolveOption] = useState("");
+  const [showResolve, setShowResolve] = useState(false);
+  const [error, setError] = useState("");
+  const [shareMsg, setShareMsg] = useState("");
+
+  const loadBet = useCallback(async () => {
+    const res = await authFetch(`/api/bets/${betId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setBet(data.bet);
+    }
+    setLoading(false);
+  }, [betId, authFetch]);
+
+  useEffect(() => {
+    loadBet();
+  }, [loadBet]);
+
+  async function joinBet(option: string) {
+    if (!bet || joining) return;
+    setJoining(option);
+    setError("");
+    const res = await authFetch(`/api/bets/${betId}/sides`, {
+      method: "POST",
+      body: JSON.stringify({ option }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "Failed to join");
+    } else {
+      await loadBet();
+      refreshUser();
+    }
+    setJoining(null);
+  }
+
+  async function resolveBet() {
+    if (!resolveOption || resolving) return;
+    setResolving(true);
+    setError("");
+    const res = await authFetch(`/api/bets/${betId}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ winningOption: resolveOption }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "Failed to resolve");
+    } else {
+      setBet((prev) => (prev ? { ...prev, ...data.bet } : null));
+      refreshUser();
+      setShowResolve(false);
+    }
+    setResolving(false);
+  }
+
+  async function postComment() {
+    if (!comment.trim() || postingComment) return;
+    setPostingComment(true);
+    const res = await authFetch(`/api/bets/${betId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ text: comment.trim() }),
+    });
+    if (res.ok) {
+      setComment("");
+      await loadBet();
+    }
+    setPostingComment(false);
+  }
+
+  function copyShareLink() {
+    const url = `${window.location.origin}/bet/${betId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareMsg("Copied!");
+      setTimeout(() => setShareMsg(""), 2000);
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-lg mx-auto px-4 pt-8 space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-surface border border-border rounded-2xl h-24 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!bet) {
+    return (
+      <div className="max-w-lg mx-auto px-4 pt-8 text-center">
+        <p className="text-muted">Bet not found.</p>
+      </div>
+    );
+  }
+
+  const mySide = bet.sides.find((s) => s.userId === user?.id);
+  const iAmProposer = bet.proposer?.id === user?.id;
+  const isLive = bet.resolution === "pending";
+  const isResolved = bet.resolution === "resolved";
+  const sidesCount = bet.sides.length;
+  const waiting = sidesCount < 2;
+
+  // Group sides by option
+  const sidesByOption: Record<string, BetSide[]> = {};
+  for (const s of bet.sides) {
+    if (!sidesByOption[s.option]) sidesByOption[s.option] = [];
+    sidesByOption[s.option].push(s);
+  }
+
+  return (
+    <div className="max-w-lg mx-auto px-4 pt-6 pb-8">
+      {/* Back */}
+      <button
+        onClick={() => router.back()}
+        className="flex items-center gap-2 text-muted hover:text-text mb-4 transition-colors text-sm"
+      >
+        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
+
+      {/* Bet header */}
+      <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex-1">
+            {bet.circle && (
+              <Link href={`/circle/${bet.circle.id}`} className="text-xs text-subtle hover:text-muted mb-1 block">
+                {bet.circle.emoji} {bet.circle.name}
+              </Link>
+            )}
+            <h1 className="text-xl font-bold text-text leading-snug">{bet.title}</h1>
+            {bet.description && (
+              <p className="text-muted text-sm mt-1.5">{bet.description}</p>
+            )}
+          </div>
+          <StatusPill bet={bet} userId={user?.id ?? ""} />
+        </div>
+
+        {/* Proposer */}
+        <div className="flex items-center gap-2 text-xs text-subtle">
+          <Avatar user={bet.proposer} size="sm" />
+          <span>{iAmProposer ? "You" : bet.proposer.name} proposed this</span>
+          {bet.resolveAt && (
+            <>
+              <span>·</span>
+              <span>Deadline: {new Date(bet.resolveAt).toLocaleDateString()}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Pot visualization */}
+      <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs text-subtle mb-0.5">Total pot</p>
+            <p className="text-3xl font-bold text-text">
+              {bet.totalPot.toLocaleString()}
+              <span className="text-muted text-base font-normal ml-1">chips</span>
+            </p>
+          </div>
+          {isResolved && bet.resolvedOption && (
+            <div className="text-right">
+              <p className="text-xs text-subtle mb-0.5">Winner</p>
+              <p className="text-win font-semibold">{bet.resolvedOption}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Sides */}
+        <div className="space-y-3">
+          {bet.options.map((opt) => {
+            const optSides = sidesByOption[opt] ?? [];
+            const isMySide = mySide?.option === opt;
+            const hasAny = optSides.length > 0;
+            const isWinner = isResolved && bet.resolvedOption === opt;
+            const isLoser = isResolved && bet.resolvedOption !== opt && hasAny;
+
+            return (
+              <div
+                key={opt}
+                className={`rounded-xl border px-4 py-3 ${
+                  isWinner
+                    ? "border-win/50 bg-win/5"
+                    : isLoser
+                    ? "border-loss/30 bg-loss/5 opacity-60"
+                    : isMySide
+                    ? "border-accent/50 bg-accent/5"
+                    : "border-border bg-bg"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {isWinner && <span className="text-win text-sm">✓</span>}
+                    <span className={`font-semibold text-sm ${isWinner ? "text-win" : isMySide ? "text-accent" : "text-text"}`}>
+                      {opt}
+                    </span>
+                    {isMySide && <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded">You</span>}
+                  </div>
+                  <span className="text-xs text-subtle">{optSides.length} {optSides.length === 1 ? "person" : "people"}</span>
+                </div>
+                {optSides.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {optSides.map((s) => (
+                      <div key={s.id} className="flex items-center gap-1">
+                        <Avatar user={s.user} size="sm" />
+                        <span className="text-xs text-muted">{s.user.id === user?.id ? "You" : s.user.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Join button */}
+                {isLive && !mySide && waiting && (
+                  <button
+                    onClick={() => joinBet(opt)}
+                    disabled={joining !== null}
+                    className="mt-3 w-full py-2 rounded-lg bg-accent hover:bg-accent-2 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
+                  >
+                    {joining === opt ? "Joining…" : `Take ${opt} · ${bet.stake} chips`}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Waiting state */}
+        {waiting && isLive && !mySide && (
+          <p className="text-xs text-subtle text-center mt-3">
+            Pick a side to lock it in.
+          </p>
+        )}
+        {waiting && isLive && mySide && (
+          <div className="mt-3 p-3 rounded-xl bg-pending/10 border border-pending/20 text-center">
+            <p className="text-pending text-sm font-medium">Waiting for someone to take the other side</p>
+            <button
+              onClick={copyShareLink}
+              className="mt-2 text-xs text-accent hover:underline"
+            >
+              {shareMsg || "Copy bet link to share"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-loss text-sm mb-3 px-1">{error}</p>
+      )}
+
+      {/* Resolve */}
+      {isLive && !waiting && (iAmProposer) && (
+        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+          {!showResolve ? (
+            <button
+              onClick={() => setShowResolve(true)}
+              className="w-full py-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent font-semibold text-sm hover:bg-accent/20 transition-colors"
+            >
+              Resolve bet
+            </button>
+          ) : (
+            <div>
+              <p className="text-sm font-medium text-text mb-3">Who won?</p>
+              <div className="flex gap-2 mb-3">
+                {bet.options.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setResolveOption(opt)}
+                    className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                      resolveOption === opt
+                        ? "bg-win border-win text-white"
+                        : "bg-bg border-border text-muted hover:border-border-2"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowResolve(false); setResolveOption(""); }}
+                  className="flex-1 py-2 rounded-xl border border-border text-muted text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={resolveBet}
+                  disabled={!resolveOption || resolving}
+                  className="flex-1 py-2 rounded-xl bg-win text-white text-sm font-semibold disabled:opacity-40 hover:opacity-90 transition-opacity"
+                >
+                  {resolving ? "Resolving…" : "Confirm"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Resolution result */}
+      {isResolved && mySide && (
+        <div className={`rounded-2xl p-4 mb-4 text-center border ${
+          mySide.status === "won"
+            ? "bg-win/10 border-win/30"
+            : "bg-loss/10 border-loss/30"
+        }`}>
+          <p className={`text-2xl font-bold ${mySide.status === "won" ? "text-win" : "text-loss"}`}>
+            {mySide.status === "won" ? "🎉 You Won!" : "You Lost"}
+          </p>
+          {mySide.status === "won" && (
+            <p className="text-muted text-sm mt-1">
+              +{Math.floor(bet.totalPot / (sidesByOption[mySide.option]?.length ?? 1)).toLocaleString()} chips
+            </p>
+          )}
+          {bet.resolutionNote && (
+            <p className="text-subtle text-xs mt-2">{bet.resolutionNote}</p>
+          )}
+        </div>
+      )}
+
+      {/* Comments */}
+      <div className="bg-surface border border-border rounded-2xl p-4">
+        <h2 className="text-sm font-semibold text-text mb-3">
+          Trash talk {bet.comments.length > 0 && <span className="text-subtle font-normal">({bet.comments.length})</span>}
+        </h2>
+
+        {bet.comments.length === 0 && (
+          <p className="text-subtle text-xs mb-3">No comments yet. Trash talk away.</p>
+        )}
+
+        <div className="space-y-3 mb-3">
+          {bet.comments.map((c) => (
+            <div key={c.id} className="flex gap-2.5">
+              <Avatar user={c.user} size="sm" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-semibold text-text">
+                    {c.user.id === user?.id ? "You" : c.user.name}
+                  </span>
+                  <span className="text-xs text-subtle">
+                    {new Date(c.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+                <p className="text-sm text-muted mt-0.5">{c.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && postComment()}
+            placeholder="Add a comment…"
+            className="flex-1 bg-bg border border-border rounded-xl px-3 py-2 text-sm text-text placeholder-subtle focus:outline-none focus:border-accent"
+          />
+          <button
+            onClick={postComment}
+            disabled={!comment.trim() || postingComment}
+            className="px-3 py-2 rounded-xl bg-accent disabled:opacity-40 text-white text-sm hover:bg-accent-2 transition-colors"
+          >
+            →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Link({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
+  return <a href={href} className={className}>{children}</a>;
+}
+
+function StatusPill({ bet, userId }: { bet: Bet; userId: string }) {
+  const mySide = bet.sides.find((s) => s.userId === userId);
+  if (bet.resolution === "resolved") {
+    if (!mySide) return <span className="text-xs px-2.5 py-1 rounded-full bg-border text-muted font-medium">Resolved</span>;
+    const won = mySide.status === "won";
+    return (
+      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${won ? "bg-win/20 text-win" : "bg-loss/20 text-loss"}`}>
+        {won ? "Won 🎉" : "Lost"}
+      </span>
+    );
+  }
+  if (bet.sides.length < 2) {
+    return <span className="text-xs px-2.5 py-1 rounded-full bg-pending/20 text-pending font-medium">Waiting</span>;
+  }
+  return <span className="text-xs px-2.5 py-1 rounded-full bg-accent/20 text-accent font-medium">Live 🔴</span>;
+}
