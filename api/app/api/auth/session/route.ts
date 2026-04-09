@@ -1,66 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sign } from "jsonwebtoken";
+import { compare } from "bcryptjs";
 import { one, run, cuid, now } from "@/lib/db";
 import { setSessionCookie } from "@/lib/web-auth";
+import { ensureFriendshipTable } from "@/lib/ensure-tables";
 
 const JWT_SECRET =
   process.env.NEXTAUTH_SECRET ?? "tilt-super-secret-key-change-in-prod-32chars";
 
-interface UserRow {
-  id: string;
-  email: string;
-  name: string | null;
-  image: string | null;
-  chips: number;
-}
-
-// POST /api/auth/session — web login, sets cookie
+// POST /api/auth/session — web login with email + password, sets cookie
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, name } = body as { email: string; name?: string };
+    await ensureFriendshipTable();
 
-    if (!email || !email.includes("@")) {
-      return NextResponse.json({ error: "Valid email required" }, { status: 400 });
+    const body = await req.json();
+    const { email, password } = body as { email: string; password: string };
+
+    if (!email?.trim() || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
-    let user = await one<UserRow>(
-      "SELECT id, email, name, image, chips FROM User WHERE email = ?",
-      [email]
+    const user = await one<any>(
+      "SELECT id, email, name, username, image, chips, password_hash FROM User WHERE email = ?",
+      [email.trim().toLowerCase()]
     );
 
     if (!user) {
-      const id = cuid();
-      const ts = now();
-      const displayName = name ?? email.split("@")[0];
-      await run(
-        `INSERT INTO User (id, email, name, image, chips, createdAt, updatedAt) VALUES (?, ?, ?, NULL, 1000, ?, ?)`,
-        [id, email, displayName, ts, ts]
-      );
-      await run(
-        `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
-        [cuid(), id, ts]
-      );
-      user = await one<UserRow>(
-        "SELECT id, email, name, image, chips FROM User WHERE id = ?",
-        [id]
-      );
-    } else {
-      await run(
-        `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
-        [cuid(), user.id, now()]
-      );
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    if (!user) {
-      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    if (!user.password_hash) {
+      return NextResponse.json({ error: "Account has no password set. Please sign up again." }, { status: 401 });
     }
 
-    const token = sign({ sub: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: "90d",
-    });
+    const valid = await compare(password, user.password_hash);
+    if (!valid) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
 
-    const res = NextResponse.json({ user, token });
+    await run(
+      `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
+      [cuid(), user.id, now()]
+    );
+
+    const token = sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: "90d" });
+    const { password_hash: _, ...safeUser } = user;
+
+    const res = NextResponse.json({ user: safeUser, token });
     setSessionCookie(res, token);
     return res;
   } catch (err) {
