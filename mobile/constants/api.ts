@@ -5,6 +5,13 @@ export const API_BASE_URL =
 export const ENDPOINTS = {
   // Auth
   mobileToken: "/api/auth/mobile-token",
+  signup: "/api/auth/signup",
+
+  // Friends
+  friends: "/api/friends",
+  friendRequests: "/api/friends/requests",
+  friend: (id: string) => `/api/friends/${id}`,
+  friendChallenge: (id: string) => `/api/friends/${id}/challenge`,
 
   // Circles
   circles: "/api/circles",

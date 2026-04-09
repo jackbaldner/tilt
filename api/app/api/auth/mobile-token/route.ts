@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sign, verify } from "jsonwebtoken";
+import { compare } from "bcryptjs";
 import { one, run, cuid, now } from "@/lib/db";
+import { ensureFriendshipTable } from "@/lib/ensure-tables";
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET ?? "tilt-super-secret-key-change-in-prod-32chars";
 
@@ -8,57 +10,54 @@ interface UserRow {
   id: string;
   email: string;
   name: string | null;
+  username: string | null;
   image: string | null;
   chips: number;
+  password_hash: string | null;
 }
 
-// POST /api/auth/mobile-token — create/login user, get JWT
+// POST /api/auth/mobile-token — login with email + password, get JWT
 export async function POST(req: NextRequest) {
   try {
-    const { email, name, image } = await req.json();
+    await ensureFriendshipTable();
 
-    if (!email) {
-      return NextResponse.json({ error: "Email required" }, { status: 400 });
+    const { email, password } = await req.json();
+
+    if (!email?.trim() || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
-    // Upsert user
-    let user = await one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE email = ?", [email]);
+    const user = await one<UserRow>(
+      "SELECT id, email, name, username, image, chips, password_hash FROM User WHERE email = ?",
+      [email.toLowerCase().trim()]
+    );
 
     if (!user) {
-      const id = cuid();
-      const timestamp = now();
-      await run(
-        `INSERT INTO User (id, email, name, image, chips, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1000, ?, ?)`,
-        [id, email, name ?? null, image ?? null, timestamp, timestamp]
-      );
-      await run(
-        `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
-        [cuid(), id, timestamp]
-      );
-      user = await one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE id = ?", [id]);
-    } else {
-      if (name || image) {
-        await run(
-          `UPDATE User SET name = COALESCE(?, name), image = COALESCE(?, image), updatedAt = ? WHERE id = ?`,
-          [name ?? null, image ?? null, now(), user.id]
-        );
-        user = await one<UserRow>("SELECT id, email, name, image, chips FROM User WHERE id = ?", [user.id]);
-      }
-      await run(
-        `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
-        [cuid(), user!.id, now()]
-      );
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    if (!user) {
-      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    if (!user.password_hash) {
+      return NextResponse.json({ error: "Account has no password set. Please sign up again." }, { status: 401 });
     }
+
+    const valid = await compare(password, user.password_hash);
+    if (!valid) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    // Ensure UserStats row exists
+    await run(
+      `INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt)
+       VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
+      [cuid(), user.id, now()]
+    );
 
     const token = sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: "90d" });
+    const { password_hash: _, ...safeUser } = user;
 
-    return NextResponse.json({ token, user });
+    return NextResponse.json({ token, user: safeUser });
   } catch (error) {
-    console.error("Mobile token error:", error);
+    console.error("Login error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -74,8 +73,8 @@ export async function GET(req: NextRequest) {
     const token = authHeader.slice(7);
     const payload = verify(token, JWT_SECRET) as { sub: string };
 
-    const user = await one<UserRow>(
-      "SELECT id, email, name, image, chips FROM User WHERE id = ?",
+    const user = await one<Omit<UserRow, "password_hash">>(
+      "SELECT id, email, name, username, image, chips FROM User WHERE id = ?",
       [payload.sub]
     );
 

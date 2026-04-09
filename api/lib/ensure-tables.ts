@@ -16,4 +16,16 @@ export async function ensureFriendshipTable() {
       UNIQUE(requesterId, addresseeId)
     )
   `);
+  // Add password_hash column to User if it doesn't exist yet
+  try {
+    await run("ALTER TABLE User ADD COLUMN password_hash TEXT");
+  } catch {
+    // Column already exists — ignore
+  }
+  // Add username column to User if it doesn't exist yet
+  try {
+    await run("ALTER TABLE User ADD COLUMN username TEXT");
+  } catch {
+    // Column already exists — ignore
+  }
 }

@@ -10,8 +10,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
 } from "react-native";
-import { useLocalSearchParams, router, Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
@@ -31,11 +33,21 @@ const BET_TYPE_CONFIG: Record<BetType, { label: string; emoji: string; defaultOp
 
 const STAKE_OPTIONS = [10, 25, 50, 100, 250, 500];
 
+interface Friend {
+  id: string;
+  friendshipId: string;
+  name: string | null;
+  username: string | null;
+  chips: number;
+}
+
 export default function CreateBetScreen() {
-  const { circleId } = useLocalSearchParams<{ circleId: string }>();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
+
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [friendPickerOpen, setFriendPickerOpen] = useState(false);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -48,6 +60,13 @@ export default function CreateBetScreen() {
   const [isSuggestingLoading, setIsSuggestingLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
 
+  // Load friends list
+  const { data: friendsData, isLoading: friendsLoading } = useQuery({
+    queryKey: ["friends"],
+    queryFn: () => api.get<{ friends: Friend[] }>(ENDPOINTS.friends),
+  });
+  const friends: Friend[] = friendsData?.friends ?? [];
+
   const setBetTypeAndOptions = (type: BetType) => {
     setBetType(type);
     const defaults = BET_TYPE_CONFIG[type].defaultOptions;
@@ -56,8 +75,13 @@ export default function CreateBetScreen() {
   };
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      api.post(ENDPOINTS.bets, {
+    mutationFn: async () => {
+      if (!selectedFriend) throw new Error("Select a friend first");
+      // Get or create the private 1:1 circle
+      const { circleId } = await api.post<{ circleId: string }>(
+        ENDPOINTS.friendChallenge(selectedFriend.friendshipId)
+      );
+      return api.post(ENDPOINTS.bets, {
         circleId,
         title: title.trim(),
         description: description.trim() || undefined,
@@ -65,16 +89,16 @@ export default function CreateBetScreen() {
         stake,
         options,
         aiResolvable,
-      }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["circle-bets", circleId] });
+      });
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["circles"] });
       if (user) setUser({ ...user, chips: user.chips - stake });
-      Toast.show({ type: "success", text1: "Bet created! 🎰" });
+      Toast.show({ type: "success", text1: "Bet sent! 🎰" });
       router.back();
     },
     onError: (err: any) => {
-      Toast.show({ type: "error", text1: err?.response?.data?.error ?? "Failed to create bet" });
+      Toast.show({ type: "error", text1: err?.response?.data?.error ?? err?.message ?? "Failed to create bet" });
     },
   });
 
@@ -101,12 +125,9 @@ export default function CreateBetScreen() {
   };
 
   const suggestBets = async () => {
-    if (!circleId) return;
     setIsSuggestingLoading(true);
     try {
-      const result = await api.post<{ suggestions: any[] }>(ENDPOINTS.suggestBet, {
-        circleId,
-      });
+      const result = await api.post<{ suggestions: any[] }>(ENDPOINTS.suggestBet, {});
       setSuggestions(result.suggestions);
     } catch {
       Toast.show({ type: "error", text1: "Could not get suggestions" });
@@ -124,6 +145,7 @@ export default function CreateBetScreen() {
   };
 
   const canSubmit =
+    selectedFriend !== null &&
     title.trim().length > 0 &&
     options.length >= 2 &&
     stake > 0 &&
@@ -156,11 +178,72 @@ export default function CreateBetScreen() {
                 <ActivityIndicator color="white" size="small" />
               ) : (
                 <Text style={{ color: canSubmit ? "white" : Colors.text.muted, fontWeight: "700", fontSize: 15 }}>
-                  Place Bet
+                  Send Bet
                 </Text>
               )}
             </TouchableOpacity>
           </View>
+
+          {/* Friend picker */}
+          <Text style={{ color: Colors.text.secondary, fontWeight: "700", marginBottom: 10 }}>
+            Challenge a Friend
+          </Text>
+
+          {friendsLoading ? (
+            <ActivityIndicator color={Colors.primary} style={{ marginBottom: 20 }} />
+          ) : friends.length === 0 ? (
+            <View
+              style={{
+                backgroundColor: Colors.surface,
+                borderRadius: 14,
+                padding: 16,
+                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: Colors.border,
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Text style={{ color: Colors.text.secondary, fontSize: 15 }}>
+                You have no friends yet.
+              </Text>
+              <TouchableOpacity onPress={() => router.push("/friends" as any)}>
+                <Text style={{ color: Colors.primary, fontWeight: "700", fontSize: 15 }}>
+                  Add friends to start betting →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setFriendPickerOpen(true)}
+              style={{
+                backgroundColor: Colors.surface,
+                borderRadius: 14,
+                padding: 16,
+                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: selectedFriend ? Colors.primary : Colors.border,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <Ionicons name="people" size={20} color={selectedFriend ? Colors.primary : Colors.text.muted} />
+              <Text
+                style={{
+                  flex: 1,
+                  color: selectedFriend ? Colors.text.primary : Colors.text.muted,
+                  fontSize: 15,
+                  fontWeight: selectedFriend ? "700" : "400",
+                }}
+              >
+                {selectedFriend
+                  ? `@${selectedFriend.username ?? selectedFriend.name}`
+                  : "Select a friend..."}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.text.muted} />
+            </TouchableOpacity>
+          )}
 
           {/* AI Suggest */}
           <TouchableOpacity
@@ -363,13 +446,7 @@ export default function CreateBetScreen() {
           </View>
 
           {(betType === "multiple_choice" || betType === "custom") && (
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 8,
-                marginBottom: 20,
-              }}
-            >
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 20 }}>
               <TextInput
                 value={newOption}
                 onChangeText={setNewOption}
@@ -479,6 +556,81 @@ export default function CreateBetScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Friend picker modal */}
+      <Modal
+        visible={friendPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFriendPickerOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+          <View
+            style={{
+              backgroundColor: Colors.background,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              maxHeight: "60%",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: Colors.text.primary, flex: 1 }}>
+                Pick a Friend
+              </Text>
+              <TouchableOpacity onPress={() => setFriendPickerOpen(false)}>
+                <Ionicons name="close" size={24} color={Colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={friends}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedFriend(item);
+                    setFriendPickerOpen(false);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: Colors.border,
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: `${Colors.primary}30`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: Colors.primary, fontWeight: "700", fontSize: 16 }}>
+                      {(item.name ?? item.username ?? "?")[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: Colors.text.primary, fontWeight: "700", fontSize: 15 }}>
+                      {item.name ?? item.username}
+                    </Text>
+                    {item.username && (
+                      <Text style={{ color: Colors.text.muted, fontSize: 13 }}>@{item.username}</Text>
+                    )}
+                  </View>
+                  <Text style={{ color: Colors.text.muted, fontSize: 13 }}>
+                    {item.chips?.toLocaleString()} 🪙
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

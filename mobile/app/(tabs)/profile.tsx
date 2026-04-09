@@ -91,9 +91,14 @@ export default function ProfileScreen() {
             )}
           </View>
           <Text style={{ fontSize: 22, fontWeight: "800", color: Colors.text.primary }}>
-            {user?.name ?? "Player"}
+            {user?.name ?? user?.username ?? "Player"}
           </Text>
-          <Text style={{ color: Colors.text.muted, fontSize: 14, marginTop: 4 }}>
+          {user?.username && (
+            <Text style={{ color: Colors.primary, fontSize: 14, fontWeight: "600", marginTop: 2 }}>
+              @{user.username}
+            </Text>
+          )}
+          <Text style={{ color: Colors.text.muted, fontSize: 14, marginTop: 2 }}>
             {user?.email}
           </Text>
 
