@@ -16,7 +16,7 @@ function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur border-t border-border safe-area-inset-bottom z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-border safe-area-inset-bottom z-50">
       <div className="max-w-lg mx-auto flex">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -48,8 +48,8 @@ function HomeIcon({ active }: { active: boolean }) {
 
 function PlusIcon({ active }: { active: boolean }) {
   return (
-    <div className={`w-9 h-9 rounded-xl flex items-center justify-center -mt-1 ${active ? "bg-accent" : "bg-accent/20 border border-accent/30"}`}>
-      <svg width="18" height="18" fill="none" stroke={active ? "white" : "currentColor"} strokeWidth="2.5" viewBox="0 0 24 24">
+    <div className={`w-9 h-9 rounded-xl flex items-center justify-center -mt-1 ${active ? "bg-accent" : "bg-accent/10 border border-accent/20"}`}>
+      <svg width="18" height="18" fill="none" stroke={active ? "white" : "#2563EB"} strokeWidth="2.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
       </svg>
     </div>

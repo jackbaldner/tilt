@@ -54,9 +54,26 @@ function Avatar({ user, size = "md" }: { user: CircleUser; size?: "sm" | "md" | 
     return <img src={user.image} alt={user.name} className={`${sizes[size]} rounded-full object-cover flex-shrink-0`} />;
   }
   return (
-    <div className={`${sizes[size]} rounded-full bg-accent/20 flex items-center justify-center font-bold text-accent flex-shrink-0`}>
+    <div className={`${sizes[size]} rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center font-bold text-accent flex-shrink-0`}>
       {user.name?.[0]?.toUpperCase() ?? "?"}
     </div>
+  );
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) return <span className="text-sm font-bold text-amber-500">1</span>;
+  if (rank === 2) return <span className="text-sm font-bold text-slate-400">2</span>;
+  if (rank === 3) return <span className="text-sm font-bold text-amber-700">3</span>;
+  return <span className="text-xs text-subtle">{rank}</span>;
+}
+
+function ShareIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+      <polyline points="16 6 12 2 8 6" />
+      <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
   );
 }
 
@@ -150,7 +167,7 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
       </button>
 
       {/* Circle header */}
-      <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
+      <div className="bg-white border border-border rounded-2xl p-5 mb-4 shadow-sm">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-3xl mb-2">{circle.emoji}</div>
@@ -167,14 +184,15 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
           <div className="flex flex-col gap-2">
             <Link
               href={`/bet/new?circleId=${circleId}`}
-              className="text-sm font-semibold text-white bg-accent hover:bg-accent-2 px-3 py-2 rounded-xl transition-colors text-center whitespace-nowrap"
+              className="text-sm font-semibold text-white bg-accent hover:bg-accent-2 px-3 py-2 rounded-xl transition-colors text-center whitespace-nowrap shadow-sm"
             >
               + Bet
             </Link>
             <button
               onClick={getInviteLink}
-              className="text-sm text-muted bg-bg border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted bg-surface border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"
             >
+              <ShareIcon />
               {shareMsg || "Invite"}
             </button>
           </div>
@@ -188,7 +206,7 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors capitalize ${
-              tab === t ? "bg-bg text-text shadow-sm" : "text-subtle hover:text-muted"
+              tab === t ? "bg-white text-text shadow-sm border border-border" : "text-subtle hover:text-muted"
             }`}
           >
             {t}
@@ -200,10 +218,10 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
       {tab === "bets" && (
         <div className="space-y-3">
           {activeBets.length === 0 && resolvedBets.length === 0 && (
-            <div className="bg-surface border border-dashed border-border rounded-2xl p-6 text-center">
+            <div className="bg-surface border border-dashed border-border-2 rounded-2xl p-6 text-center">
               <p className="text-muted text-sm">No bets yet in this circle.</p>
               <Link href={`/bet/new?circleId=${circleId}`} className="text-accent text-sm hover:underline mt-1 block">
-                Create the first bet →
+                Create the first bet
               </Link>
             </div>
           )}
@@ -230,22 +248,23 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
 
       {/* Leaderboard tab */}
       {tab === "leaderboard" && (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden">
+        <div className="bg-white border border-border rounded-2xl overflow-hidden shadow-sm">
           {sortedMembers.map((m, i) => {
             const isMe = m.userId === user?.id;
-            const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
             return (
               <div
                 key={m.userId}
                 className={`flex items-center gap-3 px-4 py-3.5 ${i !== 0 ? "border-t border-border" : ""} ${isMe ? "bg-accent/5" : ""}`}
               >
-                <div className="w-7 text-center text-sm">{medal ?? <span className="text-subtle text-xs">{i + 1}</span>}</div>
+                <div className="w-7 text-center flex items-center justify-center">
+                  <RankBadge rank={i + 1} />
+                </div>
                 <Avatar user={m.user} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-text text-sm font-medium truncate">
                     {isMe ? "You" : m.user.name}
                   </p>
-                  <p className="text-subtle text-xs">{m.role}</p>
+                  <p className="text-subtle text-xs capitalize">{m.role}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-text text-sm font-bold">{m.chips.toLocaleString()}</p>
@@ -267,21 +286,21 @@ function BetRow({ bet, userId }: { bet: Bet; userId: string }) {
 
   return (
     <Link href={`/bet/${bet.id}`} className="block">
-      <div className="bg-surface border border-border rounded-2xl p-4 hover:border-border-2 transition-colors">
+      <div className="bg-white border border-border rounded-2xl p-4 hover:border-border-2 hover:shadow-sm transition-all">
         <div className="flex items-start justify-between gap-2 mb-2">
           <p className="text-text text-sm font-semibold leading-snug line-clamp-2 flex-1">{bet.title}</p>
           {isResolved ? (
             mySide ? (
-              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${mySide.status === "won" ? "bg-win/20 text-win" : "bg-loss/20 text-loss"}`}>
+              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium border ${mySide.status === "won" ? "bg-win/10 text-win border-win/20" : "bg-loss/10 text-loss border-loss/20"}`}>
                 {mySide.status === "won" ? "Won" : "Lost"}
               </span>
             ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-border text-muted flex-shrink-0">Done</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-border flex-shrink-0">Done</span>
             )
           ) : isWaiting ? (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-pending/20 text-pending flex-shrink-0">Open</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-pending/10 text-pending border border-pending/20 flex-shrink-0">Open</span>
           ) : (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent flex-shrink-0">Live</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 flex-shrink-0">Live</span>
           )}
         </div>
 

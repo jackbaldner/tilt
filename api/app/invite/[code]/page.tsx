@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useApiClient } from "@/app/providers";
+import { TiltLogo } from "@/components/TiltLogo";
 
 interface CirclePreview {
   id: string;
@@ -12,6 +13,16 @@ interface CirclePreview {
   owner: { id: string; name: string };
   memberCount: number;
   betCount: number;
+}
+
+function BrokenLinkIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-subtle mx-auto mb-3">
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
+  );
 }
 
 export default function JoinPage({ params }: { params: Promise<{ code: string }> }) {
@@ -41,7 +52,6 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
 
   async function join() {
     if (!user) {
-      // Store invite code and redirect to login
       sessionStorage.setItem("pendingInvite", code);
       router.push("/");
       return;
@@ -69,10 +79,10 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
   if (notFound || !circle) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4 text-center">
-        <p className="text-3xl mb-3">🔗</p>
+        <BrokenLinkIcon />
         <h1 className="text-xl font-bold text-text mb-2">Invalid invite link</h1>
         <p className="text-muted text-sm mb-6">This invite link is no longer valid.</p>
-        <a href="/dashboard" className="text-accent hover:underline text-sm">Go to dashboard</a>
+        <a href="/dashboard" className="text-accent hover:underline text-sm font-medium">Go to dashboard</a>
       </div>
     );
   }
@@ -80,17 +90,17 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
       <div
-        className="pointer-events-none fixed inset-0 opacity-20"
-        style={{ background: "radial-gradient(ellipse 80% 60% at 50% -20%, #8b5cf630, transparent)" }}
+        className="pointer-events-none fixed inset-0 opacity-30"
+        style={{ background: "radial-gradient(ellipse 80% 60% at 50% -10%, #2563eb18, transparent)" }}
       />
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-6">
-          <span className="text-2xl font-bold text-text">🎲 Tilt</span>
+          <TiltLogo size="md" />
         </div>
 
-        <div className="bg-surface border border-border rounded-2xl p-6 shadow-xl text-center">
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm text-center">
           <div className="text-4xl mb-3">{circle.emoji}</div>
           <h1 className="text-2xl font-bold text-text mb-1">{circle.name}</h1>
           {circle.description && (
@@ -115,13 +125,13 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
           <button
             onClick={join}
             disabled={joining}
-            className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors"
+            className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors shadow-sm"
           >
             {joining ? "Joining…" : user ? `Join ${circle.name}` : "Sign in to join"}
           </button>
 
           {user && (
-            <a href="/dashboard" className="block mt-3 text-subtle text-xs hover:text-muted">
+            <a href="/dashboard" className="block mt-3 text-subtle text-xs hover:text-muted transition-colors">
               Go to dashboard instead
             </a>
           )}

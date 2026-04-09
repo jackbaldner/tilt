@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./providers";
+import { TiltLogo } from "@/components/TiltLogo";
 
 export default function LoginPage() {
   const { login, user, loading } = useAuth();
@@ -73,29 +74,28 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
-      {/* Background gradient */}
+      {/* Subtle blue gradient wash at the top */}
       <div
-        className="pointer-events-none fixed inset-0 opacity-30"
+        className="pointer-events-none fixed inset-0 opacity-40"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 50% -20%, #8b5cf620, transparent)",
+            "radial-gradient(ellipse 80% 50% at 50% -10%, #2563eb18, transparent)",
         }}
       />
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 mb-4">
-            <span className="text-3xl">🎲</span>
+          <div className="flex justify-center mb-4">
+            <TiltLogo size="lg" />
           </div>
-          <h1 className="text-4xl font-bold text-text tracking-tight">Tilt</h1>
-          <p className="text-muted mt-2 text-base">
+          <p className="text-muted mt-3 text-base">
             Bet your friends on anything.
           </p>
         </div>
 
         {/* Form card */}
-        <div className="bg-surface border border-border rounded-2xl p-6 shadow-xl">
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm shadow-slate-100">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
@@ -113,7 +113,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 disabled={submitting}
-                className="w-full rounded-xl bg-bg border border-border px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition disabled:opacity-50 text-base"
+                className="w-full rounded-xl bg-surface border border-border px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition disabled:opacity-50 text-base"
               />
             </div>
 
@@ -126,7 +126,7 @@ export default function LoginPage() {
               disabled={submitting || !email.trim()}
               className="w-full rounded-xl bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 transition-colors text-base"
             >
-              {submitting ? "Signing in…" : "Continue →"}
+              {submitting ? "Signing in…" : "Continue"}
             </button>
           </form>
 
@@ -135,14 +135,14 @@ export default function LoginPage() {
               <div className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-surface px-2 text-subtle">or</span>
+              <span className="bg-white px-2 text-subtle">or</span>
             </div>
           </div>
 
           <button
             onClick={handleDemo}
             disabled={submitting}
-            className="w-full rounded-xl bg-surface-2 hover:bg-border border border-border disabled:opacity-40 disabled:cursor-not-allowed text-muted font-medium py-3 px-4 transition-colors text-sm"
+            className="w-full rounded-xl bg-surface hover:bg-surface-2 border border-border disabled:opacity-40 disabled:cursor-not-allowed text-muted font-medium py-3 px-4 transition-colors text-sm"
           >
             Try a demo account
           </button>

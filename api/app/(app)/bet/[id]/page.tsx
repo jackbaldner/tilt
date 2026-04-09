@@ -59,9 +59,31 @@ function Avatar({ user, size = "md" }: { user: BetUser; size?: "sm" | "md" | "lg
     return <img src={user.image} alt={user.name} className={`${sizes[size]} rounded-full object-cover`} />;
   }
   return (
-    <div className={`${sizes[size]} rounded-full bg-accent/20 flex items-center justify-center font-bold text-accent flex-shrink-0`}>
+    <div className={`${sizes[size]} rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center font-bold text-accent flex-shrink-0`}>
       {user.name?.[0]?.toUpperCase() ?? "?"}
     </div>
+  );
+}
+
+function TrophyIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
+      <path d="M4 22h16" />
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+      <path d="M18 2H6v7a6 6 0 0012 0V2z" />
+    </svg>
+  );
+}
+
+function LiveDot() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse inline-block" />
+      Live
+    </span>
   );
 }
 
@@ -179,7 +201,6 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
   const sidesCount = bet.sides.length;
   const waiting = sidesCount < 2;
 
-  // Group sides by option
   const sidesByOption: Record<string, BetSide[]> = {};
   for (const s of bet.sides) {
     if (!sidesByOption[s.option]) sidesByOption[s.option] = [];
@@ -200,13 +221,13 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
       </button>
 
       {/* Bet header */}
-      <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
+      <div className="bg-white border border-border rounded-2xl p-5 mb-4 shadow-sm">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1">
             {bet.circle && (
-              <Link href={`/circle/${bet.circle.id}`} className="text-xs text-subtle hover:text-muted mb-1 block">
+              <a href={`/circle/${bet.circle.id}`} className="text-xs text-subtle hover:text-muted mb-1 block">
                 {bet.circle.emoji} {bet.circle.name}
-              </Link>
+              </a>
             )}
             <h1 className="text-xl font-bold text-text leading-snug">{bet.title}</h1>
             {bet.description && (
@@ -216,7 +237,6 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
           <StatusPill bet={bet} userId={user?.id ?? ""} />
         </div>
 
-        {/* Proposer */}
         <div className="flex items-center gap-2 text-xs text-subtle">
           <Avatar user={bet.proposer} size="sm" />
           <span>{iAmProposer ? "You" : bet.proposer.name} proposed this</span>
@@ -230,7 +250,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
       </div>
 
       {/* Pot visualization */}
-      <div className="bg-surface border border-border rounded-2xl p-5 mb-4">
+      <div className="bg-white border border-border rounded-2xl p-5 mb-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-xs text-subtle mb-0.5">Total pot</p>
@@ -261,21 +281,27 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                 key={opt}
                 className={`rounded-xl border px-4 py-3 ${
                   isWinner
-                    ? "border-win/50 bg-win/5"
+                    ? "border-win/40 bg-win/5"
                     : isLoser
-                    ? "border-loss/30 bg-loss/5 opacity-60"
+                    ? "border-loss/20 bg-loss/5 opacity-60"
                     : isMySide
-                    ? "border-accent/50 bg-accent/5"
-                    : "border-border bg-bg"
+                    ? "border-accent/40 bg-accent/5"
+                    : "border-border bg-surface"
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    {isWinner && <span className="text-win text-sm">✓</span>}
+                    {isWinner && (
+                      <span className="text-win">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </span>
+                    )}
                     <span className={`font-semibold text-sm ${isWinner ? "text-win" : isMySide ? "text-accent" : "text-text"}`}>
                       {opt}
                     </span>
-                    {isMySide && <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded">You</span>}
+                    {isMySide && <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">You</span>}
                   </div>
                   <span className="text-xs text-subtle">{optSides.length} {optSides.length === 1 ? "person" : "people"}</span>
                 </div>
@@ -290,7 +316,6 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                   </div>
                 )}
 
-                {/* Join button */}
                 {isLive && !mySide && waiting && (
                   <button
                     onClick={() => joinBet(opt)}
@@ -305,19 +330,22 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
           })}
         </div>
 
-        {/* Waiting state */}
         {waiting && isLive && !mySide && (
           <p className="text-xs text-subtle text-center mt-3">
             Pick a side to lock it in.
           </p>
         )}
         {waiting && isLive && mySide && (
-          <div className="mt-3 p-3 rounded-xl bg-pending/10 border border-pending/20 text-center">
+          <div className="mt-3 p-3 rounded-xl bg-pending/5 border border-pending/20 text-center">
             <p className="text-pending text-sm font-medium">Waiting for someone to take the other side</p>
             <button
               onClick={copyShareLink}
-              className="mt-2 text-xs text-accent hover:underline"
+              className="mt-2 text-xs text-accent hover:underline flex items-center gap-1 mx-auto"
             >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+              </svg>
               {shareMsg || "Copy bet link to share"}
             </button>
           </div>
@@ -329,12 +357,12 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
       )}
 
       {/* Resolve */}
-      {isLive && !waiting && (iAmProposer) && (
-        <div className="bg-surface border border-border rounded-2xl p-4 mb-4">
+      {isLive && !waiting && iAmProposer && (
+        <div className="bg-white border border-border rounded-2xl p-4 mb-4 shadow-sm">
           {!showResolve ? (
             <button
               onClick={() => setShowResolve(true)}
-              className="w-full py-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent font-semibold text-sm hover:bg-accent/20 transition-colors"
+              className="w-full py-2.5 rounded-xl bg-accent/5 border border-accent/20 text-accent font-semibold text-sm hover:bg-accent/10 transition-colors"
             >
               Resolve bet
             </button>
@@ -349,7 +377,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                     className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
                       resolveOption === opt
                         ? "bg-win border-win text-white"
-                        : "bg-bg border-border text-muted hover:border-border-2"
+                        : "bg-surface border-border text-muted hover:border-border-2"
                     }`}
                   >
                     {opt}
@@ -359,7 +387,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
               <div className="flex gap-2">
                 <button
                   onClick={() => { setShowResolve(false); setResolveOption(""); }}
-                  className="flex-1 py-2 rounded-xl border border-border text-muted text-sm"
+                  className="flex-1 py-2 rounded-xl border border-border text-muted text-sm hover:bg-surface transition-colors"
                 >
                   Cancel
                 </button>
@@ -378,13 +406,24 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
 
       {/* Resolution result */}
       {isResolved && mySide && (
-        <div className={`rounded-2xl p-4 mb-4 text-center border ${
+        <div className={`rounded-2xl p-5 mb-4 text-center border ${
           mySide.status === "won"
-            ? "bg-win/10 border-win/30"
-            : "bg-loss/10 border-loss/30"
+            ? "bg-win/5 border-win/25"
+            : "bg-loss/5 border-loss/25"
         }`}>
-          <p className={`text-2xl font-bold ${mySide.status === "won" ? "text-win" : "text-loss"}`}>
-            {mySide.status === "won" ? "🎉 You Won!" : "You Lost"}
+          <div className={`flex justify-center mb-2 ${mySide.status === "won" ? "text-win" : "text-loss"}`}>
+            {mySide.status === "won" ? (
+              <TrophyIcon />
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            )}
+          </div>
+          <p className={`text-xl font-bold ${mySide.status === "won" ? "text-win" : "text-loss"}`}>
+            {mySide.status === "won" ? "You Won!" : "You Lost"}
           </p>
           {mySide.status === "won" && (
             <p className="text-muted text-sm mt-1">
@@ -398,7 +437,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
       )}
 
       {/* Comments */}
-      <div className="bg-surface border border-border rounded-2xl p-4">
+      <div className="bg-white border border-border rounded-2xl p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-text mb-3">
           Trash talk {bet.comments.length > 0 && <span className="text-subtle font-normal">({bet.comments.length})</span>}
         </h2>
@@ -432,14 +471,17 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && postComment()}
             placeholder="Add a comment…"
-            className="flex-1 bg-bg border border-border rounded-xl px-3 py-2 text-sm text-text placeholder-subtle focus:outline-none focus:border-accent"
+            className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-sm text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
           />
           <button
             onClick={postComment}
             disabled={!comment.trim() || postingComment}
             className="px-3 py-2 rounded-xl bg-accent disabled:opacity-40 text-white text-sm hover:bg-accent-2 transition-colors"
           >
-            →
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
           </button>
         </div>
       </div>
@@ -447,23 +489,24 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
   );
 }
 
-function Link({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
-  return <a href={href} className={className}>{children}</a>;
-}
-
 function StatusPill({ bet, userId }: { bet: Bet; userId: string }) {
   const mySide = bet.sides.find((s) => s.userId === userId);
   if (bet.resolution === "resolved") {
-    if (!mySide) return <span className="text-xs px-2.5 py-1 rounded-full bg-border text-muted font-medium">Resolved</span>;
+    if (!mySide) return <span className="text-xs px-2.5 py-1 rounded-full bg-surface-2 text-muted border border-border font-medium">Resolved</span>;
     const won = mySide.status === "won";
     return (
-      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${won ? "bg-win/20 text-win" : "bg-loss/20 text-loss"}`}>
-        {won ? "Won 🎉" : "Lost"}
+      <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${won ? "bg-win/10 text-win border-win/20" : "bg-loss/10 text-loss border-loss/20"}`}>
+        {won ? "Won" : "Lost"}
       </span>
     );
   }
   if (bet.sides.length < 2) {
-    return <span className="text-xs px-2.5 py-1 rounded-full bg-pending/20 text-pending font-medium">Waiting</span>;
+    return <span className="text-xs px-2.5 py-1 rounded-full bg-pending/10 text-pending border border-pending/20 font-medium">Open</span>;
   }
-  return <span className="text-xs px-2.5 py-1 rounded-full bg-accent/20 text-accent font-medium">Live 🔴</span>;
+  return (
+    <span className="text-xs px-2.5 py-1 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium inline-flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+      Live
+    </span>
+  );
 }

@@ -33,19 +33,19 @@ interface Circle {
 function BetStatusBadge({ bet, userId }: { bet: Bet; userId: string }) {
   const mySide = bet.sides.find((s) => s.userId === userId);
   if (bet.resolution === "resolved") {
-    if (!mySide) return <span className="text-xs px-2 py-0.5 rounded-full bg-border text-muted">Resolved</span>;
+    if (!mySide) return <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-border">Resolved</span>;
     const won = mySide.status === "won";
     return (
-      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${won ? "bg-win/20 text-win" : "bg-loss/20 text-loss"}`}>
-        {won ? "Won 🎉" : "Lost"}
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${won ? "bg-win/10 text-win border border-win/20" : "bg-loss/10 text-loss border border-loss/20"}`}>
+        {won ? "Won" : "Lost"}
       </span>
     );
   }
   const sideCount = bet.sides.length;
   if (sideCount < 2) {
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-pending/20 text-pending">Waiting</span>;
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-pending/10 text-pending border border-pending/20">Open</span>;
   }
-  return <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent">Live</span>;
+  return <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">Live</span>;
 }
 
 function BetCard({ bet, userId }: { bet: Bet; userId: string }) {
@@ -54,7 +54,7 @@ function BetCard({ bet, userId }: { bet: Bet; userId: string }) {
 
   return (
     <Link href={`/bet/${bet.id}`} className="block">
-      <div className="bg-surface border border-border rounded-2xl p-4 hover:border-border-2 transition-colors active:scale-[0.98]">
+      <div className="bg-white border border-border rounded-2xl p-4 hover:border-border-2 hover:shadow-sm transition-all active:scale-[0.98]">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-text text-sm leading-tight line-clamp-2">{bet.title}</p>
@@ -95,8 +95,8 @@ function BetCard({ bet, userId }: { bet: Bet; userId: string }) {
 function CircleCard({ circle }: { circle: Circle }) {
   return (
     <Link href={`/circle/${circle.id}`} className="block">
-      <div className="bg-surface border border-border rounded-2xl p-4 hover:border-border-2 transition-colors active:scale-[0.98] min-w-[160px]">
-        <div className="text-2xl mb-2">{circle.emoji}</div>
+      <div className="bg-white border border-border rounded-2xl p-4 hover:border-border-2 hover:shadow-sm transition-all active:scale-[0.98] min-w-[160px]">
+        <div className="text-xl mb-2">{circle.emoji}</div>
         <p className="font-semibold text-text text-sm leading-tight">{circle.name}</p>
         <div className="flex items-center gap-3 mt-2 text-xs text-subtle">
           {circle._memberCount != null && <span>{circle._memberCount} members</span>}
@@ -116,7 +116,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateCircle, setShowCreateCircle] = useState(false);
   const [newCircleName, setNewCircleName] = useState("");
-  const [newCircleEmoji, setNewCircleEmoji] = useState("🎯");
+  const [newCircleEmoji, setNewCircleEmoji] = useState("");
   const [creating, setCreating] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -151,13 +151,14 @@ export default function DashboardPage() {
     setCreating(true);
     const res = await authFetch("/api/circles", {
       method: "POST",
-      body: JSON.stringify({ name: newCircleName.trim(), emoji: newCircleEmoji }),
+      body: JSON.stringify({ name: newCircleName.trim(), emoji: newCircleEmoji || "⚡" }),
     });
     if (res.ok) {
       const data = await res.json();
       setCircles((prev) => [data.circle ?? data, ...prev]);
       setShowCreateCircle(false);
       setNewCircleName("");
+      setNewCircleEmoji("");
     }
     setCreating(false);
   }
@@ -171,7 +172,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-text">
-            Hey, {user?.name?.split(" ")[0] ?? "there"} 👋
+            Hey, {user?.name?.split(" ")[0] ?? "there"}
           </h1>
           <p className="text-muted text-sm mt-0.5">
             <span className="text-accent font-semibold">{user?.chips?.toLocaleString()}</span>{" "}
@@ -180,9 +181,12 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/bet/new"
-          className="flex items-center gap-1.5 bg-accent hover:bg-accent-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          className="flex items-center gap-1.5 bg-accent hover:bg-accent-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
         >
-          <span>+</span> New Bet
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          New Bet
         </Link>
       </div>
 
@@ -199,28 +203,29 @@ export default function DashboardPage() {
         </div>
 
         {showCreateCircle && (
-          <form onSubmit={createCircle} className="bg-surface border border-border rounded-2xl p-4 mb-3">
+          <form onSubmit={createCircle} className="bg-white border border-border rounded-2xl p-4 mb-3 shadow-sm">
             <p className="text-sm font-medium text-text mb-3">Create a circle</p>
             <div className="flex gap-2 mb-3">
               <input
                 value={newCircleEmoji}
                 onChange={(e) => setNewCircleEmoji(e.target.value)}
-                className="w-12 bg-bg border border-border rounded-xl px-2 py-2 text-center text-lg focus:outline-none focus:border-accent"
+                className="w-12 bg-surface border border-border rounded-xl px-2 py-2 text-center text-lg focus:outline-none focus:border-accent"
                 maxLength={2}
+                placeholder="⚡"
               />
               <input
                 value={newCircleName}
                 onChange={(e) => setNewCircleName(e.target.value)}
                 placeholder="Circle name (e.g. Work Guys)"
                 autoFocus
-                className="flex-1 bg-bg border border-border rounded-xl px-3 py-2 text-text text-sm focus:outline-none focus:border-accent"
+                className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-text text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
               />
             </div>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setShowCreateCircle(false)}
-                className="flex-1 text-sm text-muted py-2 rounded-xl border border-border hover:border-border-2 transition-colors"
+                className="flex-1 text-sm text-muted py-2 rounded-xl border border-border hover:bg-surface transition-colors"
               >
                 Cancel
               </button>
@@ -236,7 +241,7 @@ export default function DashboardPage() {
         )}
 
         {circles.length === 0 && !loading ? (
-          <div className="bg-surface border border-dashed border-border rounded-2xl p-6 text-center">
+          <div className="bg-surface border border-dashed border-border-2 rounded-2xl p-6 text-center">
             <p className="text-muted text-sm">No circles yet.</p>
             <p className="text-subtle text-xs mt-1">Create one to start betting with friends.</p>
           </div>
@@ -262,10 +267,10 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : activeBets.length === 0 ? (
-          <div className="bg-surface border border-dashed border-border rounded-2xl p-6 text-center">
+          <div className="bg-surface border border-dashed border-border-2 rounded-2xl p-6 text-center">
             <p className="text-muted text-sm">No active bets.</p>
             <Link href="/bet/new" className="text-accent text-sm hover:underline mt-1 block">
-              Create your first bet →
+              Create your first bet
             </Link>
           </div>
         ) : (

@@ -16,6 +16,14 @@ interface AiSuggestion {
   type: string;
 }
 
+function SparkleIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" />
+    </svg>
+  );
+}
+
 export default function NewBetPage() {
   const { user } = useAuth();
   const { authFetch } = useApiClient();
@@ -128,7 +136,6 @@ export default function NewBetPage() {
     }
   }
 
-  const selectedCircle = circles.find((c) => c.id === circleId);
   const finalStake = customStake ? parseInt(customStake) || 0 : stake;
 
   return (
@@ -167,8 +174,8 @@ export default function NewBetPage() {
                   onClick={() => { setCircleId(c.id); setSuggestions([]); }}
                   className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
                     circleId === c.id
-                      ? "bg-accent/20 border-accent text-text"
-                      : "bg-surface border-border text-muted hover:border-border-2"
+                      ? "bg-accent/10 border-accent text-accent"
+                      : "bg-white border-border text-muted hover:border-border-2"
                   }`}
                 >
                   <span>{c.emoji}</span> {c.name}
@@ -186,9 +193,9 @@ export default function NewBetPage() {
               <button
                 type="button"
                 onClick={polishTitle}
-                className="text-xs text-accent hover:text-accent-2"
+                className="flex items-center gap-1 text-xs text-accent hover:text-accent-2 font-medium"
               >
-                ✨ Polish with AI
+                <SparkleIcon /> Polish with AI
               </button>
             )}
           </div>
@@ -197,7 +204,7 @@ export default function NewBetPage() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Lakers win tonight vs Nuggets"
             rows={2}
-            className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-none text-base"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 resize-none text-base"
           />
         </div>
 
@@ -211,7 +218,7 @@ export default function NewBetPage() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add any clarifying details..."
             rows={2}
-            className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent resize-none text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 resize-none text-sm"
           />
         </div>
 
@@ -230,7 +237,7 @@ export default function NewBetPage() {
                 className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-colors ${
                   stake === s && !customStake
                     ? "bg-accent border-accent text-white"
-                    : "bg-surface border-border text-muted hover:border-border-2"
+                    : "bg-white border-border text-muted hover:border-border-2"
                 }`}
               >
                 {s}
@@ -243,7 +250,7 @@ export default function NewBetPage() {
             onChange={(e) => setCustomStake(e.target.value)}
             placeholder="Custom amount"
             min="1"
-            className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-text placeholder-subtle focus:outline-none focus:border-accent text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-2.5 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 text-sm"
           />
         </div>
 
@@ -256,7 +263,7 @@ export default function NewBetPage() {
             type="datetime-local"
             value={resolveAt}
             onChange={(e) => setResolveAt(e.target.value)}
-            className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-text focus:outline-none focus:border-accent text-sm"
+            className="w-full bg-white border border-border rounded-xl px-4 py-2.5 text-text focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 text-sm"
           />
         </div>
 
@@ -272,11 +279,11 @@ export default function NewBetPage() {
             </div>
             <div className="text-center">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent">
+                <div className="w-8 h-8 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-xs font-bold text-accent">
                   {user?.name?.[0]?.toUpperCase() ?? "?"}
                 </div>
-                <span className="text-subtle text-sm">vs</span>
-                <div className="w-8 h-8 rounded-full bg-border flex items-center justify-center text-xs text-muted">?</div>
+                <span className="text-subtle text-sm font-medium">vs</span>
+                <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center text-xs text-muted">?</div>
               </div>
               <p className="text-xs text-subtle mt-1">{finalStake} + {finalStake}</p>
             </div>
@@ -288,9 +295,9 @@ export default function NewBetPage() {
         <button
           type="submit"
           disabled={submitting || !title.trim() || !circleId || finalStake < 1}
-          className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-base"
+          className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-base shadow-sm"
         >
-          {submitting ? "Creating bet…" : "Create Bet 🎲"}
+          {submitting ? "Creating bet…" : "Create Bet"}
         </button>
       </form>
 
@@ -302,9 +309,9 @@ export default function NewBetPage() {
             <button
               onClick={fetchSuggestions}
               disabled={loadingSuggestions}
-              className="text-xs text-accent hover:text-accent-2 disabled:opacity-50"
+              className="flex items-center gap-1 text-xs text-accent hover:text-accent-2 font-medium disabled:opacity-50"
             >
-              {loadingSuggestions ? "Thinking…" : "✨ Suggest bets"}
+              <SparkleIcon /> {loadingSuggestions ? "Thinking…" : "Suggest bets"}
             </button>
           </div>
 
@@ -315,7 +322,7 @@ export default function NewBetPage() {
                   key={i}
                   type="button"
                   onClick={() => { setTitle(s.title); if (s.description) setDescription(s.description); }}
-                  className="w-full text-left bg-surface border border-border hover:border-accent/50 rounded-xl px-4 py-3 transition-colors"
+                  className="w-full text-left bg-white border border-border hover:border-accent/40 hover:bg-accent/5 rounded-xl px-4 py-3 transition-colors"
                 >
                   <p className="text-text text-sm font-medium">{s.title}</p>
                   {s.description && (

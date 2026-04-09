@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #09090b;
-  --color-surface: #18181b;
-  --color-surface-2: #1c1c20;
-  --color-border: #27272a;
-  --color-border-2: #3f3f46;
-  --color-text: #fafafa;
-  --color-muted: #a1a1aa;
-  --color-subtle: #52525b;
-  --color-accent: #8b5cf6;
-  --color-accent-2: #7c3aed;
-  --color-win: #22c55e;
-  --color-loss: #ef4444;
-  --color-pending: #f59e0b;
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc;
+  --color-surface-2: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-2: #cbd5e1;
+  --color-text: #0f172a;
+  --color-muted: #475569;
+  --color-subtle: #94a3b8;
+  --color-accent: #2563eb;
+  --color-accent-2: #1d4ed8;
+  --color-win: #16a34a;
+  --color-loss: #dc2626;
+  --color-pending: #d97706;
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -25,8 +25,8 @@
 
 html,
 body {
-  background-color: #09090b;
-  color: #fafafa;
+  background-color: #ffffff;
+  color: #0f172a;
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -41,7 +41,7 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #cbd5e1;
   border-radius: 2px;
 }
 
@@ -56,7 +56,7 @@ select {
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px #18181b inset;
-  -webkit-text-fill-color: #fafafa;
-  caret-color: #fafafa;
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #0f172a;
 }
