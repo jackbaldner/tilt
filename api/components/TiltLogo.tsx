@@ -12,7 +12,7 @@ export function TiltLogo({
       style={{ lineHeight: 1 }}
     >
       <span>TILT</span>
-      {/* Diagonal slash cutting through the word */}
+      {/* Horizontal strikethrough line */}
       <svg
         aria-hidden="true"
         style={{
@@ -27,12 +27,12 @@ export function TiltLogo({
         preserveAspectRatio="none"
       >
         <line
-          x1="87"
-          y1="4"
-          x2="13"
-          y2="96"
+          x1="-4"
+          y1="52"
+          x2="104"
+          y2="52"
           stroke="#2563EB"
-          strokeWidth="9"
+          strokeWidth="7"
           strokeLinecap="round"
         />
       </svg>
