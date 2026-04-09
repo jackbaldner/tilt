@@ -1,88 +1,156 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "./providers";
 
-export default function LandingPage() {
+export default function LoginPage() {
+  const { login, user, loading } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [checking, setChecking] = useState(true);
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const token = localStorage.getItem('tilt_token');
-    if (token) {
-      router.replace('/dashboard');
-    } else {
-      setChecking(false);
+    if (!loading && user) {
+      router.replace("/dashboard");
     }
-  }, [router]);
+  }, [user, loading, router]);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    if (!email.trim()) return;
+    setSubmitting(true);
+    setError("");
+
     try {
-      const res = await fetch('/api/auth/mobile-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), name: name.trim() }),
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Login failed');
-      localStorage.setItem('tilt_token', data.token);
-      router.replace('/dashboard');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong");
+        return;
+      }
+      login(data.user, data.token);
+      router.push("/dashboard");
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
-  if (checking) {
-    return <div className="min-h-screen bg-zinc-950" />;
+  async function handleDemo() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: `demo+${Date.now()}@tilt.app`,
+          name: "Demo User",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong");
+        return;
+      }
+      login(data.user, data.token);
+      router.push("/dashboard");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
+  if (loading) return null;
+
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-4">
+      {/* Background gradient */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-30"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% -20%, #8b5cf620, transparent)",
+        }}
+      />
+
+      <div className="relative w-full max-w-sm">
+        {/* Logo */}
         <div className="text-center mb-10">
-          <div className="text-6xl mb-4">🎯</div>
-          <h1 className="text-5xl font-bold text-violet-400 mb-3">Tilt</h1>
-          <p className="text-zinc-400 text-lg">Venmo for bets between friends</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 mb-4">
+            <span className="text-3xl">🎲</span>
+          </div>
+          <h1 className="text-4xl font-bold text-text tracking-tight">Tilt</h1>
+          <p className="text-muted mt-2 text-base">
+            Bet your friends on anything.
+          </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-3">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            required
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 transition-colors"
-          />
-          <input
-            type="email"
-            placeholder="Email address"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 transition-colors"
-          />
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-lg"
-          >
-            {loading ? 'Loading...' : 'Get Started'}
-          </button>
-        </form>
+        {/* Form card */}
+        <div className="bg-surface border border-border rounded-2xl p-6 shadow-xl">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-muted mb-1.5"
+              >
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                disabled={submitting}
+                className="w-full rounded-xl bg-bg border border-border px-4 py-3 text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition disabled:opacity-50 text-base"
+              />
+            </div>
 
-        <p className="text-center text-zinc-600 text-sm mt-6">
-          No password needed — just your email
+            {error && (
+              <p className="text-loss text-sm">{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting || !email.trim()}
+              className="w-full rounded-xl bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 transition-colors text-base"
+            >
+              {submitting ? "Signing in…" : "Continue →"}
+            </button>
+          </form>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-surface px-2 text-subtle">or</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleDemo}
+            disabled={submitting}
+            className="w-full rounded-xl bg-surface-2 hover:bg-border border border-border disabled:opacity-40 disabled:cursor-not-allowed text-muted font-medium py-3 px-4 transition-colors text-sm"
+          >
+            Try a demo account
+          </button>
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-subtle text-xs mt-6">
+          No password needed. Enter your email and you're in.
         </p>
       </div>
     </div>
