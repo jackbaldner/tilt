@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "./providers";
 import { TiltLogo } from "@/components/TiltLogo";
 
@@ -170,6 +171,11 @@ export default function LoginPage() {
               >
                 {submitting ? "Signing in…" : "Log In"}
               </button>
+              <div className="text-right">
+                <Link href="/forgot-password" className="text-sm text-accent hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleSignup} className="space-y-4">

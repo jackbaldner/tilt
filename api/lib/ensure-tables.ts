@@ -28,4 +28,11 @@ export async function ensureFriendshipTable() {
   } catch {
     // Column already exists — ignore
   }
+  // Add password reset token columns
+  try {
+    await run("ALTER TABLE User ADD COLUMN reset_token TEXT");
+  } catch {}
+  try {
+    await run("ALTER TABLE User ADD COLUMN reset_token_expires TEXT");
+  } catch {}
 }
