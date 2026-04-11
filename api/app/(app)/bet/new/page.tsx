@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, useApiClient } from "@/app/providers";
 
-interface Circle {
+interface Friend {
   id: string;
   name: string;
-  emoji: string;
+  username?: string;
+  image?: string;
+  friendshipId: string;
 }
 
 interface AiSuggestion {
@@ -24,15 +26,25 @@ function SparkleIcon() {
   );
 }
 
+function Avatar({ name, image, size = "md" }: { name: string; image?: string; size?: "sm" | "md" }) {
+  const cls = size === "sm" ? "w-8 h-8 text-xs" : "w-10 h-10 text-sm";
+  if (image) return <img src={image} alt={name} className={`${cls} rounded-full object-cover flex-shrink-0`} />;
+  return (
+    <div className={`${cls} rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center font-bold text-accent flex-shrink-0`}>
+      {name?.[0]?.toUpperCase() ?? "?"}
+    </div>
+  );
+}
+
 export default function NewBetPage() {
   const { user } = useAuth();
   const { authFetch } = useApiClient();
   const router = useRouter();
   const params = useSearchParams();
-  const prefilledCircleId = params.get("circleId");
+  const prefilledUserId = params.get("userId");
 
-  const [circles, setCircles] = useState<Circle[]>([]);
-  const [circleId, setCircleId] = useState(prefilledCircleId ?? "");
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [stake, setStake] = useState(50);
@@ -46,23 +58,24 @@ export default function NewBetPage() {
   const STAKES = [25, 50, 100, 250];
 
   useEffect(() => {
-    authFetch("/api/circles").then(async (res) => {
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.circles ?? data;
-        setCircles(list);
-        if (!circleId && list.length > 0) setCircleId(list[0].id);
+    authFetch("/api/friends").then(async (res) => {
+      if (!res.ok) return;
+      const data = await res.json();
+      const list: Friend[] = data.friends ?? [];
+      setFriends(list);
+      if (prefilledUserId) {
+        const match = list.find((f) => f.id === prefilledUserId);
+        if (match) setSelectedFriend(match);
       }
     });
-  }, [authFetch, circleId]);
+  }, [authFetch, prefilledUserId]);
 
   const fetchSuggestions = useCallback(async () => {
-    if (!circleId) return;
     setLoadingSuggestions(true);
     try {
       const res = await authFetch("/api/ai/suggest-bet", {
         method: "POST",
-        body: JSON.stringify({ circleId }),
+        body: JSON.stringify({}),
       });
       if (res.ok) {
         const data = await res.json();
@@ -73,7 +86,7 @@ export default function NewBetPage() {
     } finally {
       setLoadingSuggestions(false);
     }
-  }, [circleId, authFetch]);
+  }, [authFetch]);
 
   async function polishTitle() {
     if (!title.trim() || title.length < 5) return;
@@ -113,7 +126,7 @@ export default function NewBetPage() {
       const res = await authFetch("/api/bets", {
         method: "POST",
         body: JSON.stringify({
-          circleId: circleId || undefined,
+          challengedUserId: selectedFriend?.id ?? undefined,
           title: title.trim(),
           description: description.trim() || undefined,
           type: "binary",
@@ -154,27 +167,45 @@ export default function NewBetPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Circle selector */}
+
+        {/* Who are you betting? */}
         <div>
-          <label className="block text-sm font-medium text-muted mb-2">
-            Circle <span className="text-subtle font-normal">(optional)</span>
-          </label>
-          {circles.length === 0 ? (
-            <p className="text-subtle text-sm">No circles yet — bet goes directly to your friend.</p>
+          <label className="block text-sm font-medium text-muted mb-2">Who are you betting?</label>
+
+          {friends.length === 0 ? (
+            <div className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-subtle">
+              No friends yet.{" "}
+              <a href="/friends" className="text-accent hover:underline">Add friends</a>
+              {" "}to challenge them, or create the bet anyway and share the link.
+            </div>
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
-              {circles.map((c) => (
+              {/* "Anyone" option — clears selection */}
+              <button
+                type="button"
+                onClick={() => setSelectedFriend(null)}
+                className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                  !selectedFriend
+                    ? "bg-accent/10 border-accent text-accent"
+                    : "bg-white border-border text-muted hover:border-border-2"
+                }`}
+              >
+                Anyone
+              </button>
+
+              {friends.map((f) => (
                 <button
-                  key={c.id}
+                  key={f.id}
                   type="button"
-                  onClick={() => { setCircleId(c.id); setSuggestions([]); }}
+                  onClick={() => setSelectedFriend(f)}
                   className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
-                    circleId === c.id
+                    selectedFriend?.id === f.id
                       ? "bg-accent/10 border-accent text-accent"
                       : "bg-white border-border text-muted hover:border-border-2"
                   }`}
                 >
-                  <span>{c.emoji}</span> {c.name}
+                  <Avatar name={f.name} image={f.image} size="sm" />
+                  {f.username ?? f.name}
                 </button>
               ))}
             </div>
@@ -279,7 +310,11 @@ export default function NewBetPage() {
                   {user?.name?.[0]?.toUpperCase() ?? "?"}
                 </div>
                 <span className="text-subtle text-sm font-medium">vs</span>
-                <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center text-xs text-muted">?</div>
+                {selectedFriend ? (
+                  <Avatar name={selectedFriend.name} image={selectedFriend.image} size="sm" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center text-xs text-muted">?</div>
+                )}
               </div>
               <p className="text-xs text-subtle mt-1">{finalStake} + {finalStake}</p>
             </div>
@@ -293,43 +328,45 @@ export default function NewBetPage() {
           disabled={submitting || !title.trim() || finalStake < 1}
           className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-base shadow-sm"
         >
-          {submitting ? "Creating bet…" : "Create Bet"}
+          {submitting
+            ? "Creating bet…"
+            : selectedFriend
+            ? `Challenge ${selectedFriend.username ?? selectedFriend.name}`
+            : "Create Bet"}
         </button>
       </form>
 
       {/* AI suggestions */}
-      {circleId && (
-        <div className="mt-6 mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-muted">Need ideas?</p>
-            <button
-              onClick={fetchSuggestions}
-              disabled={loadingSuggestions}
-              className="flex items-center gap-1 text-xs text-accent hover:text-accent-2 font-medium disabled:opacity-50"
-            >
-              <SparkleIcon /> {loadingSuggestions ? "Thinking…" : "Suggest bets"}
-            </button>
-          </div>
-
-          {suggestions.length > 0 && (
-            <div className="space-y-2">
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => { setTitle(s.title); if (s.description) setDescription(s.description); }}
-                  className="w-full text-left bg-white border border-border hover:border-accent/40 hover:bg-accent/5 rounded-xl px-4 py-3 transition-colors"
-                >
-                  <p className="text-text text-sm font-medium">{s.title}</p>
-                  {s.description && (
-                    <p className="text-subtle text-xs mt-0.5 line-clamp-1">{s.description}</p>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+      <div className="mt-6 mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium text-muted">Need ideas?</p>
+          <button
+            onClick={fetchSuggestions}
+            disabled={loadingSuggestions}
+            className="flex items-center gap-1 text-xs text-accent hover:text-accent-2 font-medium disabled:opacity-50"
+          >
+            <SparkleIcon /> {loadingSuggestions ? "Thinking…" : "Suggest bets"}
+          </button>
         </div>
-      )}
+
+        {suggestions.length > 0 && (
+          <div className="space-y-2">
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => { setTitle(s.title); if (s.description) setDescription(s.description); }}
+                className="w-full text-left bg-white border border-border hover:border-accent/40 hover:bg-accent/5 rounded-xl px-4 py-3 transition-colors"
+              >
+                <p className="text-text text-sm font-medium">{s.title}</p>
+                {s.description && (
+                  <p className="text-subtle text-xs mt-0.5 line-clamp-1">{s.description}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
