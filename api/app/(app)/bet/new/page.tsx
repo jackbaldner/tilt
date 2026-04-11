@@ -94,7 +94,7 @@ export default function NewBetPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!circleId || !title.trim()) return;
+    if (!title.trim()) return;
 
     const finalStake = customStake ? parseInt(customStake) : stake;
     if (!finalStake || finalStake < 1) {
@@ -113,7 +113,7 @@ export default function NewBetPage() {
       const res = await authFetch("/api/bets", {
         method: "POST",
         body: JSON.stringify({
-          circleId,
+          circleId: circleId || undefined,
           title: title.trim(),
           description: description.trim() || undefined,
           type: "binary",
@@ -156,15 +156,11 @@ export default function NewBetPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Circle selector */}
         <div>
-          <label className="block text-sm font-medium text-muted mb-2">Circle</label>
+          <label className="block text-sm font-medium text-muted mb-2">
+            Circle <span className="text-subtle font-normal">(optional)</span>
+          </label>
           {circles.length === 0 ? (
-            <p className="text-subtle text-sm">
-              You need to{" "}
-              <a href="/dashboard" className="text-accent underline">
-                create a circle
-              </a>{" "}
-              first.
-            </p>
+            <p className="text-subtle text-sm">No circles yet — bet goes directly to your friend.</p>
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
               {circles.map((c) => (
@@ -294,7 +290,7 @@ export default function NewBetPage() {
 
         <button
           type="submit"
-          disabled={submitting || !title.trim() || !circleId || finalStake < 1}
+          disabled={submitting || !title.trim() || finalStake < 1}
           className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-base shadow-sm"
         >
           {submitting ? "Creating bet…" : "Create Bet"}

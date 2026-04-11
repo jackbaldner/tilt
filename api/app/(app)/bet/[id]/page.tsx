@@ -99,7 +99,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
   const [postingComment, setPostingComment] = useState(false);
   const [joining, setJoining] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
-  const [resolveOption, setResolveOption] = useState("");
+  const [resolveWinnerId, setResolveWinnerId] = useState("");
   const [showResolve, setShowResolve] = useState(false);
   const [error, setError] = useState("");
   const [shareMsg, setShareMsg] = useState("");
@@ -136,12 +136,12 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
   }
 
   async function resolveBet() {
-    if (!resolveOption || resolving) return;
+    if (!resolveWinnerId || resolving) return;
     setResolving(true);
     setError("");
     const res = await authFetch(`/api/bets/${betId}/resolve`, {
       method: "POST",
-      body: JSON.stringify({ winningOption: resolveOption }),
+      body: JSON.stringify({ winnerId: resolveWinnerId }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -259,12 +259,17 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
               <span className="text-muted text-base font-normal ml-1">chips</span>
             </p>
           </div>
-          {isResolved && bet.resolvedOption && (
-            <div className="text-right">
-              <p className="text-xs text-subtle mb-0.5">Winner</p>
-              <p className="text-win font-semibold">{bet.resolvedOption}</p>
-            </div>
-          )}
+          {isResolved && (() => {
+            const winSide = bet.sides.find((s) => s.status === "won");
+            if (!winSide) return null;
+            const winnerName = winSide.userId === user?.id ? "You" : (winSide.user.name ?? winSide.user.id);
+            return (
+              <div className="text-right">
+                <p className="text-xs text-subtle mb-0.5">Winner</p>
+                <p className="text-win font-semibold">{winnerName}</p>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Sides */}
@@ -370,30 +375,31 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
             <div>
               <p className="text-sm font-medium text-text mb-3">Who won?</p>
               <div className="flex gap-2 mb-3">
-                {bet.options.map((opt) => (
+                {bet.sides.map((side) => (
                   <button
-                    key={opt}
-                    onClick={() => setResolveOption(opt)}
-                    className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
-                      resolveOption === opt
+                    key={side.userId}
+                    onClick={() => setResolveWinnerId(side.userId)}
+                    className={`flex-1 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                      resolveWinnerId === side.userId
                         ? "bg-win border-win text-white"
                         : "bg-surface border-border text-muted hover:border-border-2"
                     }`}
                   >
-                    {opt}
+                    <Avatar user={side.user} size="sm" />
+                    {side.userId === user?.id ? "You" : (side.user.name ?? side.user.id)}
                   </button>
                 ))}
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setShowResolve(false); setResolveOption(""); }}
+                  onClick={() => { setShowResolve(false); setResolveWinnerId(""); }}
                   className="flex-1 py-2 rounded-xl border border-border text-muted text-sm hover:bg-surface transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={resolveBet}
-                  disabled={!resolveOption || resolving}
+                  disabled={!resolveWinnerId || resolving}
                   className="flex-1 py-2 rounded-xl bg-win text-white text-sm font-semibold disabled:opacity-40 hover:opacity-90 transition-opacity"
                 >
                   {resolving ? "Resolving…" : "Confirm"}
