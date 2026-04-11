@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     if (resend) {
       await resend.emails.send({
-        from: "Tilt <onboarding@resend.dev>",
+        from: "Tilt <noreply@tiltapp.co>",
         to: user.email,
         subject: "Reset your Tilt password",
         html: `

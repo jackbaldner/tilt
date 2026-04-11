@@ -29,7 +29,7 @@ export async function sendBetChallengeEmail({
 
   try {
     await resend.emails.send({
-      from: "Tilt <onboarding@resend.dev>",
+      from: "Tilt <noreply@tiltapp.co>",
       to: toEmail,
       subject: `${challenger} challenged you to a bet 🎯`,
       html: `
@@ -80,7 +80,7 @@ export async function sendBetJoinedEmail({
 
   try {
     await resend.emails.send({
-      from: "Tilt <onboarding@resend.dev>",
+      from: "Tilt <noreply@tiltapp.co>",
       to: toEmail,
       subject: `${joinerName} accepted your bet 🔥`,
       html: `
