@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, cuid, now, transaction } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
+import { sendBetChallengeEmail } from "@/lib/email";
 
 // GET /api/bets — list bets for the current user (all bets they have a side in)
 export async function GET(req: NextRequest) {
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const { circleId, title, description, type, stake, options, resolveAt, aiResolvable } = await req.json();
+  const { circleId, challengedUserId, title, description, type, stake, options, resolveAt, aiResolvable } = await req.json();
 
   if (!title || !type || !stake || !options?.length) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -110,7 +111,43 @@ export async function POST(req: NextRequest) {
     "SELECT bs.*, u.name as userName, u.image as userImage FROM BetSide bs JOIN User u ON u.id = bs.userId WHERE bs.betId = ?",
     [betId]
   );
-  const proposer = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [auth.id]);
+  const proposer = await one<any>("SELECT id, name, username, image FROM User WHERE id = ?", [auth.id]);
+
+  // Determine who to notify: explicit challengedUserId, or the other member of a private 1:1 circle
+  let notifyUserId = challengedUserId ?? null;
+  if (!notifyUserId && circleId) {
+    const circle = await one<any>("SELECT name FROM Circle WHERE id = ?", [circleId]);
+    if (circle?.name?.startsWith("__private__")) {
+      const otherMember = await one<any>(
+        "SELECT userId FROM CircleMember WHERE circleId = ? AND userId != ?",
+        [circleId, auth.id]
+      );
+      notifyUserId = otherMember?.userId ?? null;
+    }
+  }
+
+  if (notifyUserId) {
+    const challenged = await one<any>("SELECT id, name, email FROM User WHERE id = ?", [notifyUserId]);
+    if (challenged?.email) {
+      const proposerName = proposer?.username ?? proposer?.name ?? "Someone";
+      // In-app notification (fire and forget)
+      run(
+        "INSERT INTO Notification (id, userId, type, title, body, data, read, createdAt) VALUES (?, ?, 'bet_challenge', ?, ?, ?, 0, ?)",
+        [cuid(), notifyUserId, `${proposerName} challenged you`,
+         `${title} · ${stake} chips`,
+         JSON.stringify({ betId }), now()]
+      ).catch(() => {});
+      // Email notification (fire and forget)
+      sendBetChallengeEmail({
+        toEmail: challenged.email,
+        toName: challenged.name ?? "",
+        fromName: proposerName,
+        betTitle: title,
+        stake,
+        betId,
+      });
+    }
+  }
 
   return NextResponse.json({
     bet: {
