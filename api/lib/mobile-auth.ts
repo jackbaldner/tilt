@@ -9,7 +9,6 @@ export interface AuthUser {
   email: string;
   name?: string | null;
   image?: string | null;
-  chips: number;
 }
 
 interface UserRow {
@@ -17,7 +16,6 @@ interface UserRow {
   email: string;
   name: string | null;
   image: string | null;
-  chips: number;
 }
 
 export async function requireAuth(req: NextRequest): Promise<AuthUser | NextResponse> {
@@ -31,7 +29,7 @@ export async function requireAuth(req: NextRequest): Promise<AuthUser | NextResp
     const payload = verify(token, JWT_SECRET) as { sub: string };
 
     const user = await one<UserRow>(
-      "SELECT id, email, name, image, chips FROM User WHERE id = ?",
+      "SELECT id, email, name, image FROM User WHERE id = ?",
       [payload.sub]
     );
 

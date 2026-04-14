@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
       [auth.id]
     ),
     all<any>(
-      `SELECT * FROM "Transaction" WHERE userId = ? ORDER BY createdAt DESC LIMIT 10`,
+      `SELECT le.id, le.amount, le.currency, le.entry_type as type, le.ref_type, le.ref_id, le.created_at as createdAt
+       FROM LedgerEntry le
+       JOIN Wallet w ON w.id = le.to_wallet_id
+       WHERE w.owner_type = 'user' AND w.owner_id = ?
+       ORDER BY le.created_at DESC LIMIT 10`,
       [auth.id]
     ),
   ]);
