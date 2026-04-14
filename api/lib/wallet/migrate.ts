@@ -1,18 +1,10 @@
-import { run } from "../db";
+import { execScript, run } from "../db";
 import * as fs from "fs";
 import * as path from "path";
 
 export async function ensureWalletSchema() {
   const ddl = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf-8");
-  // Split on `;` followed by whitespace/newline, run each statement individually
-  const statements = ddl
-    .split(/;\s*\n/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-  for (const stmt of statements) {
-    await run(stmt);
-  }
+  await execScript(ddl);
 
   // Seed system wallets (idempotent via INSERT OR IGNORE)
   await run(

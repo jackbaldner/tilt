@@ -45,7 +45,7 @@ describe("wallet schema", () => {
     // No error = pass
   });
 
-  it("enforces double-entry constraints (currency check)", async () => {
+  it("enforces currency CHECK constraint", async () => {
     const { ensureWalletSchema } = await import("../../lib/wallet/migrate");
     const { run } = await import("../../lib/db");
     await ensureWalletSchema();

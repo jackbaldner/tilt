@@ -219,6 +219,22 @@ function rowToObject<T>(columns: string[], row: import("@libsql/client").Row): T
   return obj as T;
 }
 
+// ─── execScript ──────────────────────────────────────────────────────────────
+//
+// Execute a multi-statement SQL script (e.g. DDL migrations).
+// • better-sqlite3: db.exec() natively handles multi-statement scripts.
+// • libSQL/Turso:   client.executeMultiple() is purpose-built for SQL scripts.
+
+export async function execScript(sql: string): Promise<void> {
+  if (USE_TURSO) {
+    const client = await getLibsqlClient();
+    await client.executeMultiple(sql);
+    return;
+  }
+  const db = getLocalDb();
+  db.exec(sql);
+}
+
 // Legacy: expose getDb for any code that called it directly (local only)
 export function getDb() {
   return getLocalDb();
