@@ -68,6 +68,27 @@ describe("wallet.reverseBetResolution", () => {
     ).rejects.toThrow();
   });
 
+  it("reverses a resolve that had rake (rake comes back from House)", async () => {
+    const wallet = await setup();
+    await wallet.joinBet({ betId: "b1", userId: "alice", option: "yes", stake: 50 });
+    await wallet.joinBet({ betId: "b1", userId: "bob", option: "no", stake: 50 });
+    await wallet.resolveBet({ betId: "b1", winningOption: "yes", rakeBps: 500 });
+
+    const { one } = await import("../../lib/db");
+    const houseBefore = await one<{ balance: number }>("SELECT balance FROM Wallet WHERE id = 'sys_house_chips'");
+    expect(houseBefore?.balance).toBe(5);
+
+    await wallet.reverseBetResolution({ betId: "b1" });
+
+    const houseAfter = await one<{ balance: number }>("SELECT balance FROM Wallet WHERE id = 'sys_house_chips'");
+    expect(houseAfter?.balance).toBe(0);
+    // Escrow should hold the original pot (100)
+    const escrow = await one<{ balance: number }>(
+      "SELECT balance FROM Wallet WHERE owner_type = 'bet_escrow' AND owner_id = 'b1'"
+    );
+    expect(escrow?.balance).toBe(100);
+  });
+
   it("can re-resolve the same bet to a different outcome after reversal", async () => {
     const wallet = await setup();
     await wallet.joinBet({ betId: "b1", userId: "alice", option: "yes", stake: 50 });

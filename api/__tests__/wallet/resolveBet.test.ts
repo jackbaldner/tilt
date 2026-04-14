@@ -126,4 +126,22 @@ describe("wallet.resolveBet", () => {
       wallet.resolveBet({ betId: "b1", winningOption: "yes" })
     ).rejects.toThrow();
   });
+
+  it("writes ledger entries with correct shape", async () => {
+    const wallet = await setup();
+    await wallet.joinBet({ betId: "b1", userId: "alice", option: "yes", stake: 50 });
+    await wallet.joinBet({ betId: "b1", userId: "bob", option: "no", stake: 50 });
+    await wallet.resolveBet({ betId: "b1", winningOption: "yes", rakeBps: 500 });
+
+    const { all } = await import("../../lib/db");
+    const entries = await all<{ entry_type: string; amount: number; ref_type: string; ref_id: string; idempotency_key: string }>(
+      "SELECT entry_type, amount, ref_type, ref_id, idempotency_key FROM LedgerEntry WHERE entry_type = 'resolve' AND ref_id = 'b1' ORDER BY created_at ASC"
+    );
+    expect(entries.length).toBe(2); // 1 rake + 1 winner payout
+    expect(entries[0].amount).toBe(5);  // rake
+    expect(entries[0].idempotency_key).toMatch(/:rake$/);
+    expect(entries[1].amount).toBe(95); // winner
+    expect(entries[1].ref_type).toBe("bet");
+    expect(entries[1].ref_id).toBe("b1");
+  });
 });

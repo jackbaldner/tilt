@@ -15,9 +15,15 @@ interface BetSideRow {
   createdAt: string;
 }
 
+/**
+ * Refund all stakes from a bet's escrow back to the joiners.
+ * Returns [] if the bet has no joiners (no-op, not an error).
+ * For comparison: resolveBet throws on no joiners (it's a precondition violation
+ * because resolution implies a winner exists).
+ */
 export async function refundBet(input: RefundBetInput): Promise<string[] | "duplicate"> {
   const currency = input.currency ?? "CHIPS";
-  const naturalKey = input.idempotencyKey ?? `refund:${input.betId}`;
+  const naturalKey = input.idempotencyKey ?? `refund:${input.betId}:${input.reason}`;
 
   const existing = await one<{ id: string }>(
     "SELECT id FROM LedgerEntry WHERE idempotency_key = ?",

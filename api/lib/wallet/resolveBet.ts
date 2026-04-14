@@ -48,7 +48,8 @@ export async function resolveBet(input: ResolveBetInput): Promise<string[] | "du
 
   // Pre-create wallets outside transaction
   const escrowWallet = await getOrCreateWallet("bet_escrow", input.betId, currency);
-  const houseWalletId = currency === "CHIPS" ? "sys_house_chips" : "sys_house_coins";
+  const houseWallet = await getOrCreateWallet("system", "SYSTEM_HOUSE", currency);
+  const houseWalletId = houseWallet.id;
   // Pre-create winner wallets so we don't have to within the transaction
   const winnerWallets = new Map<string, string>();
   for (const w of winners) {

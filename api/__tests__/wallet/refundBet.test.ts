@@ -54,4 +54,16 @@ describe("wallet.refundBet", () => {
     await wallet.refundBet({ betId: "b1", reason: "lone_joiner" });
     expect(await wallet.getBalance("alice", "CHIPS")).toBe(1000);
   });
+
+  it("encodes the reason into the idempotency key", async () => {
+    const wallet = await setup();
+    await wallet.joinBet({ betId: "b1", userId: "alice", option: "yes", stake: 50 });
+    await wallet.refundBet({ betId: "b1", reason: "lone_joiner" });
+
+    const { one } = await import("../../lib/db");
+    const entry = await one<{ idempotency_key: string }>(
+      "SELECT idempotency_key FROM LedgerEntry WHERE entry_type = 'refund' AND idempotency_key LIKE '%lone_joiner%'"
+    );
+    expect(entry).not.toBeNull();
+  });
 });
