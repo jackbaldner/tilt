@@ -13,7 +13,6 @@ model User {
   name          String?
   image         String?
   username      String?   @unique
-  chips         Int       @default(1000)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -24,7 +23,6 @@ model User {
   memberships    CircleMember[]
   proposedBets   Bet[]            @relation("BetProposer")
   betSides       BetSide[]
-  transactions   Transaction[]
   comments       Comment[]
   invitesSent    CircleInvite[]   @relation("InviteSender")
   notifications  Notification[]
@@ -89,7 +87,6 @@ model CircleMember {
   circleId  String
   userId    String
   role      String   @default("member")
-  chips     Int      @default(0)
   joinedAt  DateTime @default(now())
 
   circle    Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
@@ -136,7 +133,6 @@ model Bet {
   proposer        User        @relation("BetProposer", fields: [proposerId], references: [id])
   sides           BetSide[]
   comments        Comment[]
-  transactions    Transaction[]
   activities      Activity[]
   disputes        Dispute[]
 }
@@ -154,19 +150,6 @@ model BetSide {
   user      User     @relation(fields: [userId], references: [id])
 
   @@unique([betId, userId])
-}
-
-model Transaction {
-  id          String   @id @default(cuid())
-  userId      String
-  betId       String?
-  type        String
-  amount      Int
-  description String?
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id])
-  bet         Bet?     @relation(fields: [betId], references: [id])
 }
 
 model Comment {
@@ -233,4 +216,48 @@ model UserStats {
   updatedAt      DateTime @updatedAt
 
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Wallet & Ledger (managed by api/lib/wallet/, not Prisma)
+// See docs/superpowers/specs/2026-04-13-wallet-and-ledger-design.md
+model Wallet {
+  id           String   @id
+  ownerType    String   @map("owner_type")
+  ownerId      String   @map("owner_id")
+  currency     String
+  balance      Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([ownerType, ownerId, currency])
+  @@index([ownerType, ownerId])
+}
+
+model LedgerEntry {
+  id                String   @id
+  fromWalletId      String   @map("from_wallet_id")
+  toWalletId        String   @map("to_wallet_id")
+  amount            Int
+  currency          String
+  entryType         String   @map("entry_type")
+  refType           String?  @map("ref_type")
+  refId             String?  @map("ref_id")
+  reversesEntryId   String?  @map("reverses_entry_id")
+  idempotencyKey    String?  @unique @map("idempotency_key")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([fromWalletId])
+  @@index([toWalletId])
+  @@index([refType, refId])
+  @@index([entryType])
+}
+
+model IdempotencyRequest {
+  key          String   @id
+  userId       String   @map("user_id")
+  requestHash  String   @map("request_hash")
+  responseJson String   @map("response_json")
+  statusCode   Int      @map("status_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
 }
