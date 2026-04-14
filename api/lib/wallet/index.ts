@@ -6,3 +6,4 @@ export { joinBet, type JoinBetInput } from "./joinBet";
 export { resolveBet, type ResolveBetInput } from "./resolveBet";
 export { refundBet, type RefundBetInput } from "./refundBet";
 export { reverseBetResolution, type ReverseBetInput } from "./reverseBet";
+export { reconcileWallet, reconcileAll, type ReconciliationReport, type WalletDrift } from "./reconcile";
