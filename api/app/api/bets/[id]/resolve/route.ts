@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all, cuid, now, transaction } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
-
-const TX_INSERT = `INSERT INTO "Transaction" (id, userId, betId, type, amount, description, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+import { resolveBet, refundBet } from "@/lib/wallet";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await ensureFriendshipTable();
@@ -11,8 +10,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (isAuthError(auth)) return auth;
   const { id: betId } = await params;
 
-  const { winnerId, resolutionNote } = await req.json();
-  if (!winnerId) return NextResponse.json({ error: "Winner required" }, { status: 400 });
+  const { winningOption, resolutionNote } = await req.json();
+  if (!winningOption) return NextResponse.json({ error: "winningOption required" }, { status: 400 });
 
   const bet = await one<any>("SELECT * FROM Bet WHERE id = ?", [betId]);
   if (!bet) return NextResponse.json({ error: "Bet not found" }, { status: 404 });
@@ -30,60 +29,56 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  const sides = await all<any>("SELECT * FROM BetSide WHERE betId = ?", [betId]);
-  const winnerSide = sides.find((s: any) => s.userId === winnerId);
-  if (!winnerSide) return NextResponse.json({ error: "Winner is not a participant" }, { status: 400 });
+  const sides = await all<{ id: string; userId: string; option: string; stake: number }>(
+    "SELECT id, userId, option, stake FROM BetSide WHERE betId = ?",
+    [betId]
+  );
+  const distinctUsers = new Set(sides.map((s) => s.userId));
+  const distinctOptions = [...new Set(sides.map((s) => s.option))];
 
-  const loserSides = sides.filter((s: any) => s.userId !== winnerId);
+  // Wallet operation: refund if lone joiner or no winner side; otherwise resolve
+  if (distinctUsers.size < 2) {
+    await refundBet({ betId, reason: "lone_joiner" });
+  } else if (!distinctOptions.includes(winningOption)) {
+    await refundBet({ betId, reason: "tie" });
+  } else {
+    await resolveBet({ betId, winningOption });
+  }
+
+  const winnerSides = sides.filter((s) => s.option === winningOption);
+  const loserSides = sides.filter((s) => s.option !== winningOption);
   const totalPot = bet.totalPot;
   const timestamp = now();
 
-  const winnerStats = await one<any>(
-    "SELECT biggestWin, longestStreak, currentStreak FROM UserStats WHERE userId = ?",
-    [winnerId]
-  );
-  const profit = totalPot - winnerSide.stake;
-
   await transaction((db) => {
-    // Mark bet resolved — store winnerId in resolvedOption for reference
+    // Mark bet resolved
     db.run(
       "UPDATE Bet SET resolution = 'resolved', resolvedOption = ?, resolvedAt = ?, resolutionNote = ?, updatedAt = ? WHERE id = ?",
-      [winnerId, timestamp, resolutionNote ?? null, timestamp, betId]
+      [winningOption, timestamp, resolutionNote ?? null, timestamp, betId]
     );
 
-    // Winner: mark won, credit full pot
-    db.run("UPDATE BetSide SET status = 'won' WHERE betId = ? AND userId = ?", [betId, winnerId]);
-    db.run("UPDATE User SET chips = chips + ?, updatedAt = ? WHERE id = ?", [totalPot, timestamp, winnerId]);
-    if (bet.circleId) {
-      db.run("UPDATE CircleMember SET chips = chips + ? WHERE circleId = ? AND userId = ?", [totalPot, bet.circleId, winnerId]);
+    // Winner sides: mark won, update stats, notify
+    for (const side of winnerSides) {
+      db.run("UPDATE BetSide SET status = 'won' WHERE id = ?", [side.id]);
+      db.run(
+        "INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)",
+        [cuid(), side.userId, timestamp]
+      );
+      const profit = totalPot - side.stake;
+      db.run(
+        "UPDATE UserStats SET wonBets = wonBets + 1, totalChipsWon = totalChipsWon + ?, currentStreak = currentStreak + 1, updatedAt = ? WHERE userId = ?",
+        [profit > 0 ? profit : 0, timestamp, side.userId]
+      );
+      db.run(
+        "INSERT INTO Notification (id, userId, type, title, body, data, read, createdAt) VALUES (?, ?, 'bet_resolved', 'You won!', ?, ?, 0, ?)",
+        [cuid(), side.userId, `${bet.title} — you won!`,
+         JSON.stringify({ betId, circleId: bet.circleId }), timestamp]
+      );
     }
-    db.run(TX_INSERT, [cuid(), winnerId, betId, "bet_won", totalPot, `Won bet: ${bet.title}`, timestamp]);
-    db.run(
-      "INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)",
-      [cuid(), winnerId, timestamp]
-    );
-    db.run(
-      "UPDATE UserStats SET wonBets = wonBets + 1, totalChipsWon = totalChipsWon + ?, currentStreak = currentStreak + 1, updatedAt = ? WHERE userId = ?",
-      [profit > 0 ? profit : 0, timestamp, winnerId]
-    );
-    if (profit > 0 && winnerStats) {
-      if (profit > (winnerStats.biggestWin ?? 0)) {
-        db.run("UPDATE UserStats SET biggestWin = ? WHERE userId = ?", [profit, winnerId]);
-      }
-      if ((winnerStats.currentStreak ?? 0) + 1 > (winnerStats.longestStreak ?? 0)) {
-        db.run("UPDATE UserStats SET longestStreak = currentStreak + 1 WHERE userId = ?", [winnerId]);
-      }
-    }
-    db.run(
-      "INSERT INTO Notification (id, userId, type, title, body, data, read, createdAt) VALUES (?, ?, 'bet_resolved', 'You won!', ?, ?, 0, ?)",
-      [cuid(), winnerId, `${bet.title} — you won ${totalPot} chips!`,
-       JSON.stringify({ betId, circleId: bet.circleId }), timestamp]
-    );
 
-    // Losers: mark lost, no chip adjustment (chips already deducted on bet placement)
+    // Loser sides: mark lost, update stats, notify
     for (const side of loserSides) {
       db.run("UPDATE BetSide SET status = 'lost' WHERE id = ?", [side.id]);
-      db.run(TX_INSERT, [cuid(), side.userId, betId, "bet_lost", 0, `Lost bet: ${bet.title}`, timestamp]);
       db.run(
         "INSERT OR IGNORE INTO UserStats (id, userId, totalBets, wonBets, lostBets, totalChipsWon, totalChipsLost, biggestWin, currentStreak, longestStreak, updatedAt) VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)",
         [cuid(), side.userId, timestamp]
@@ -103,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       db.run(
         "INSERT INTO Activity (id, circleId, betId, userId, type, data, createdAt) VALUES (?, ?, ?, ?, 'bet_resolved', ?, ?)",
         [cuid(), bet.circleId, betId, auth.id,
-         JSON.stringify({ betTitle: bet.title, winnerId, totalPot }),
+         JSON.stringify({ betTitle: bet.title, winningOption, totalPot }),
          timestamp]
       );
     }
