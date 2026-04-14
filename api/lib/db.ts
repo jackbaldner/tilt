@@ -136,6 +136,76 @@ export async function transaction<T>(fn: (helpers: {
   return t(helpers);
 }
 
+// ─── InteractiveTransaction ───────────────────────────────────────────────────
+//
+// Unlike `transaction()` which batches writes only, this supports reading rows
+// mid-transaction. Turso uses client.transaction("write"); local uses
+// better-sqlite3's synchronous db.transaction() with async-compatible wrappers.
+
+export interface InteractiveTx {
+  run(sql: string, params?: unknown[]): Promise<void>;
+  one<T>(sql: string, params?: unknown[]): Promise<T | null>;
+  all<T>(sql: string, params?: unknown[]): Promise<T[]>;
+}
+
+export async function interactiveTransaction<T>(
+  fn: (tx: InteractiveTx) => Promise<T>
+): Promise<T> {
+  if (USE_TURSO) {
+    const client = await getLibsqlClient();
+    const tx = await client.transaction("write");
+    try {
+      const helpers: InteractiveTx = {
+        run: async (sql, params) => {
+          await tx.execute({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+        },
+        one: async <R>(sql: string, params?: unknown[]) => {
+          const res = await tx.execute({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+          if (res.rows.length === 0) return null;
+          return rowToObject<R>(res.columns, res.rows[0]);
+        },
+        all: async <R>(sql: string, params?: unknown[]) => {
+          const res = await tx.execute({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
+          return res.rows.map((row) => rowToObject<R>(res.columns, row));
+        },
+      };
+      const result = await fn(helpers);
+      await tx.commit();
+      return result;
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  }
+
+  // better-sqlite3: use manual BEGIN/COMMIT/ROLLBACK so we can await the user's
+  // async fn between the transaction boundaries. The helpers call the sync
+  // better-sqlite3 API and wrap results in resolved Promises.
+  const db = getLocalDb();
+  db.prepare("BEGIN").run();
+  try {
+    const helpers: InteractiveTx = {
+      run: async (sql, params) => {
+        db.prepare(sql).run(...(params ?? []));
+      },
+      one: async <R>(sql: string, params?: unknown[]) => {
+        const stmt = db.prepare(sql);
+        return (params ? stmt.get(...params) : stmt.get()) as R | null;
+      },
+      all: async <R>(sql: string, params?: unknown[]) => {
+        const stmt = db.prepare(sql);
+        return (params ? stmt.all(...params) : stmt.all()) as R[];
+      },
+    };
+    const result = await fn(helpers);
+    db.prepare("COMMIT").run();
+    return result;
+  } catch (err) {
+    db.prepare("ROLLBACK").run();
+    throw err;
+  }
+}
+
 // ─── Internal ─────────────────────────────────────────────────────────────────
 
 function rowToObject<T>(columns: string[], row: import("@libsql/client").Row): T {
