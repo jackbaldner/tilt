@@ -30,15 +30,25 @@ export async function grant(input: GrantInput): Promise<string | "duplicate"> {
 
   const userWallet = await getOrCreateWallet("user", input.userId, input.currency);
 
-  return transferAtomic({
-    fromWalletId: MINT_WALLET_IDS[input.currency],
-    toWalletId: userWallet.id,
-    amount: input.amount,
-    currency: input.currency,
-    entryType: "grant",
-    refType: "grant",
-    refId: input.reason,
-    reversesEntryId: null,
-    idempotencyKey: naturalKey,
-  });
+  try {
+    return await transferAtomic({
+      fromWalletId: MINT_WALLET_IDS[input.currency],
+      toWalletId: userWallet.id,
+      amount: input.amount,
+      currency: input.currency,
+      entryType: "grant",
+      refType: "grant",
+      refId: input.reason,
+      reversesEntryId: null,
+      idempotencyKey: naturalKey,
+    });
+  } catch (err: any) {
+    // The UNIQUE constraint on LedgerEntry.idempotency_key is the source of truth.
+    // If a concurrent caller beat us to it, treat as duplicate (not a real error).
+    const msg = String(err?.message ?? err);
+    if (msg.includes("UNIQUE constraint failed") && msg.includes("idempotency_key")) {
+      return "duplicate";
+    }
+    throw err;
+  }
 }
