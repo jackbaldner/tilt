@@ -71,14 +71,19 @@ export async function POST(req: NextRequest) {
 
   const circle = await one<any>("SELECT * FROM Circle WHERE id = ?", [id]);
   const members = await all<any>(
-    `SELECT cm.*, u.name as userName, u.image as userImage FROM CircleMember cm JOIN User u ON u.id = cm.userId WHERE cm.circleId = ?`,
+    `SELECT cm.*, u.id as userId, u.name as userName, u.image as userImage FROM CircleMember cm JOIN User u ON u.id = cm.userId WHERE cm.circleId = ?`,
     [id]
   );
+  const memberBalances = await Promise.all(members.map((m: any) => getBalance(m.userId, "CHIPS")));
 
   return NextResponse.json({
     circle: {
       ...circle,
-      members: members.map((m: any) => ({ ...m, user: { id: m.userId, name: m.userName, image: m.userImage } })),
+      members: members.map((m: any, i: number) => ({
+        ...m,
+        chips: memberBalances[i],
+        user: { id: m.userId, name: m.userName, image: m.userImage, chips: memberBalances[i] },
+      })),
     },
   }, { status: 201 });
 }
