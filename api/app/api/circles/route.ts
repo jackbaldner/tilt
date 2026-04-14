@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, cuid, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
+import { getBalance } from "@/lib/wallet";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -25,12 +26,14 @@ export async function GET(req: NextRequest) {
        WHERE cm.circleId = ? ORDER BY cm.joinedAt ASC`,
       [c.id]
     );
+    const memberBalances = await Promise.all(members.map((m: any) => getBalance(m.userId, "CHIPS")));
     return {
       ...c,
       owner: { id: c.ownerId, name: c.ownerName, image: c.ownerImage },
-      members: members.map((m: any) => ({
+      members: members.map((m: any, i: number) => ({
         ...m,
-        user: { id: m.userId, name: m.userName, image: m.userImage },
+        chips: memberBalances[i],
+        user: { id: m.userId, name: m.userName, image: m.userImage, chips: memberBalances[i] },
       })),
       _count: { bets: c.betCount },
     };
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
     [id, name.trim(), description?.trim() ?? null, emoji ?? "🎯", inviteCode, auth.id, timestamp, timestamp]
   );
   await run(
-    `INSERT INTO CircleMember (id, circleId, userId, role, chips, joinedAt) VALUES (?, ?, ?, 'owner', 0, ?)`,
+    `INSERT INTO CircleMember (id, circleId, userId, role, joinedAt) VALUES (?, ?, ?, 'owner', ?)`,
     [memberId, id, auth.id, timestamp]
   );
   await run(

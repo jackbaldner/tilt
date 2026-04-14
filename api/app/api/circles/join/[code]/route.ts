@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cod
 
   const timestamp = now();
   await run(
-    "INSERT INTO CircleMember (id, circleId, userId, role, chips, joinedAt) VALUES (?, ?, ?, 'member', 0, ?)",
+    "INSERT INTO CircleMember (id, circleId, userId, role, joinedAt) VALUES (?, ?, ?, 'member', ?)",
     [cuid(), circle.id, auth.id, timestamp]
   );
   await run(

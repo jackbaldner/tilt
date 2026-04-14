@@ -30,6 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const leaderboard = membersWithChips.map((m: any) => ({
     ...m,
+    chips: m.walletChips,
     user: {
       id: m.userId,
       name: m.userName,

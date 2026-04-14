@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
+import { getBalance } from "@/lib/wallet";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(req);
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
      FROM CircleMember cm JOIN User u ON u.id = cm.userId WHERE cm.circleId = ? ORDER BY cm.joinedAt ASC`,
     [id]
   );
+  const memberBalances = await Promise.all(members.map((m: any) => getBalance(m.userId, "CHIPS")));
   const betCountRow = await one<any>("SELECT COUNT(*) as count FROM Bet WHERE circleId = ?", [id]);
   const betCount = betCountRow?.count ?? 0;
   const owner = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [circle.ownerId]);
@@ -26,9 +28,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     circle: {
       ...circle,
       owner,
-      members: members.map((m: any) => ({
+      members: members.map((m: any, i: number) => ({
         ...m,
-        user: { id: m.userId, name: m.userName, image: m.userImage },
+        chips: memberBalances[i],
+        user: { id: m.userId, name: m.userName, image: m.userImage, chips: memberBalances[i] },
       })),
       _count: { bets: betCount, members: members.length },
     },

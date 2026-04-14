@@ -40,11 +40,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
     // Add both members
     await run(
-      "INSERT OR IGNORE INTO CircleMember (id, circleId, userId, role, chips, joinedAt) VALUES (?, ?, ?, 'owner', 0, ?)",
+      "INSERT OR IGNORE INTO CircleMember (id, circleId, userId, role, joinedAt) VALUES (?, ?, ?, 'owner', ?)",
       [cuid(), circleId, auth.id, ts]
     );
     await run(
-      "INSERT OR IGNORE INTO CircleMember (id, circleId, userId, role, chips, joinedAt) VALUES (?, ?, ?, 'member', 0, ?)",
+      "INSERT OR IGNORE INTO CircleMember (id, circleId, userId, role, joinedAt) VALUES (?, ?, ?, 'member', ?)",
       [cuid(), circleId, friendId, ts]
     );
     circle = await one<any>("SELECT * FROM Circle WHERE id = ?", [circleId]);

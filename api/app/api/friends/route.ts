@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, cuid, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
+import { getBalance } from "@/lib/wallet";
 
 // GET /api/friends — list accepted friends
 export async function GET(req: NextRequest) {
@@ -22,7 +23,10 @@ export async function GET(req: NextRequest) {
     [auth.id, auth.id, auth.id]
   );
 
-  return NextResponse.json({ friends });
+  const balances = await Promise.all(friends.map((f: any) => getBalance(f.id, "CHIPS")));
+  const friendsWithChips = friends.map((f: any, i: number) => ({ ...f, chips: balances[i] }));
+
+  return NextResponse.json({ friends: friendsWithChips });
 }
 
 // POST /api/friends — send a friend request by email or username
