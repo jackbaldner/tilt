@@ -13,20 +13,24 @@ export async function getOrCreateWallet(
   currency: Currency
 ): Promise<Wallet> {
   return interactiveTransaction(async (tx) => {
-    const existing = await tx.one<Wallet>(
+    // Try to insert; if it already exists, the unique constraint is hit
+    // and we fall through to the SELECT. ON CONFLICT DO NOTHING makes
+    // this concurrency-safe.
+    const newId = cuid();
+    await tx.run(
+      `INSERT INTO Wallet (id, owner_type, owner_id, currency, balance)
+       VALUES (?, ?, ?, ?, 0)
+       ON CONFLICT (owner_type, owner_id, currency) DO NOTHING`,
+      [newId, ownerType, ownerId, currency]
+    );
+    const row = await tx.one<Wallet>(
       "SELECT * FROM Wallet WHERE owner_type = ? AND owner_id = ? AND currency = ?",
       [ownerType, ownerId, currency]
     );
-    if (existing) return existing;
-
-    const id = cuid();
-    await tx.run(
-      `INSERT INTO Wallet (id, owner_type, owner_id, currency, balance)
-       VALUES (?, ?, ?, ?, 0)`,
-      [id, ownerType, ownerId, currency]
-    );
-    const created = await tx.one<Wallet>("SELECT * FROM Wallet WHERE id = ?", [id]);
-    return created!;
+    if (!row) {
+      throw new Error(`getOrCreateWallet: failed to find wallet after upsert`);
+    }
+    return row;
   });
 }
 
@@ -44,8 +48,9 @@ export interface TransferInput {
 
 /**
  * Atomically debits `from`, credits `to`, and writes one LedgerEntry.
- * The system mint wallet ('sys_mint_chips' / 'sys_mint_coins') is the
- * only wallet allowed to go negative.
+ * Wallets with owner_type='system' AND owner_id='SYSTEM_MINT' (the
+ * Mint wallets for each currency) are the only wallets allowed to
+ * have negative balances.
  */
 export async function transferAtomic(input: TransferInput): Promise<string> {
   if (input.amount <= 0) {
