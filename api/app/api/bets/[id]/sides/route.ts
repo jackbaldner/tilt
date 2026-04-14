@@ -3,6 +3,7 @@ import { one, cuid, now, transaction } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
 import { sendBetJoinedEmail } from "@/lib/email";
+import { joinBet } from "@/lib/wallet";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await ensureFriendshipTable();
@@ -26,32 +27,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!membership) return NextResponse.json({ error: "Not a circle member" }, { status: 403 });
   }
 
-  const existing = await one<any>("SELECT * FROM BetSide WHERE betId = ? AND userId = ?", [betId, auth.id]);
-  if (existing) return NextResponse.json({ error: "Already joined this bet" }, { status: 400 });
+  const idempotencyKey = req.headers.get("idempotency-key") ?? undefined;
+  const joinResult = await joinBet({
+    betId,
+    userId: auth.id,
+    option,
+    stake: bet.stake,
+    idempotencyKey,
+  });
 
-  // Prevent a third person from joining a 1:1 bet that already has 2 sides
-  const sideCount = await one<any>("SELECT COUNT(*) as n FROM BetSide WHERE betId = ?", [betId]);
-  if ((sideCount?.n ?? 0) >= 2) return NextResponse.json({ error: "Bet is full" }, { status: 400 });
+  if (joinResult === "duplicate") {
+    const existing = await one<any>("SELECT * FROM BetSide WHERE betId = ? AND userId = ?", [betId, auth.id]);
+    const sideUser = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [auth.id]);
+    return NextResponse.json({ side: { ...existing, user: sideUser } });
+  }
 
   const user = await one<any>("SELECT * FROM User WHERE id = ?", [auth.id]);
-  if (!user || user.chips < bet.stake) return NextResponse.json({ error: "Not enough chips" }, { status: 400 });
-
-  const sideId = cuid();
   const timestamp = now();
 
   await transaction((db) => {
-    db.run(
-      "INSERT INTO BetSide (id, betId, userId, option, stake, status, createdAt) VALUES (?, ?, ?, ?, ?, 'active', ?)",
-      [sideId, betId, auth.id, option, bet.stake, timestamp]
-    );
-    db.run("UPDATE User SET chips = chips - ?, updatedAt = ? WHERE id = ?", [bet.stake, timestamp, auth.id]);
     db.run("UPDATE Bet SET totalPot = totalPot + ?, updatedAt = ? WHERE id = ?", [bet.stake, timestamp, betId]);
-    db.run(
-      `INSERT INTO "Transaction" (id, userId, betId, type, amount, description, createdAt) VALUES (?, ?, ?, 'bet_placed', ?, ?, ?)`,
-      [cuid(), auth.id, betId, -bet.stake, `Joined bet: ${bet.title} (${option})`, timestamp]
-    );
     if (bet.circleId) {
-      db.run("UPDATE CircleMember SET chips = chips - ? WHERE circleId = ? AND userId = ?", [bet.stake, bet.circleId, auth.id]);
       db.run(
         "INSERT INTO Activity (id, circleId, betId, userId, type, data, createdAt) VALUES (?, ?, ?, ?, 'bet_joined', ?, ?)",
         [cuid(), bet.circleId, betId, auth.id, JSON.stringify({ betTitle: bet.title, option, stake: bet.stake }), timestamp]
@@ -67,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     db.run(
       "INSERT INTO Notification (id, userId, type, title, body, data, read, createdAt) VALUES (?, ?, 'bet_joined', ?, ?, ?, 0, ?)",
       [cuid(), bet.proposerId,
-       `${user.username ?? user.name ?? "Someone"} accepted your bet`,
+       `${user?.username ?? user?.name ?? "Someone"} accepted your bet`,
        bet.title,
        JSON.stringify({ betId }), timestamp]
     );
@@ -86,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
 
-  const side = await one<any>("SELECT * FROM BetSide WHERE id = ?", [sideId]);
+  const side = await one<any>("SELECT * FROM BetSide WHERE betId = ? AND userId = ?", [betId, auth.id]);
   const sideUser = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [auth.id]);
 
   return NextResponse.json({ side: { ...side, user: sideUser } }, { status: 201 });
