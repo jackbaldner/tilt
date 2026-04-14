@@ -73,7 +73,8 @@ export async function one<T>(sql: string, params?: unknown[]): Promise<T | null>
   }
   const db = getLocalDb();
   const stmt = db.prepare(sql);
-  return (params ? stmt.get(...params) : stmt.get()) as T | null;
+  const row = (params ? stmt.get(...params) : stmt.get()) as T | undefined;
+  return row ?? null;
 }
 
 export async function all<T>(sql: string, params?: unknown[]): Promise<T[]> {
