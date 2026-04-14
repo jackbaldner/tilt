@@ -11,7 +11,6 @@ export interface WebUser {
   email: string;
   name?: string | null;
   image?: string | null;
-  chips: number;
 }
 
 /** Use in Server Components and layouts to get the current session user. */
@@ -23,7 +22,7 @@ export async function getSessionUser(): Promise<WebUser | null> {
 
     const payload = verify(token, JWT_SECRET) as { sub: string };
     const user = await one<WebUser>(
-      "SELECT id, email, name, image, chips FROM User WHERE id = ?",
+      "SELECT id, email, name, image FROM User WHERE id = ?",
       [payload.sub]
     );
     return user;

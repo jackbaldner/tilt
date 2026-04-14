@@ -14,8 +14,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
   const members = await all<any>(
-    `SELECT cm.*, u.id as userId, u.name as userName, u.image as userImage, u.chips as userChips
-     FROM CircleMember cm JOIN User u ON u.id = cm.userId WHERE cm.circleId = ? ORDER BY cm.chips DESC`,
+    `SELECT cm.*, u.id as userId, u.name as userName, u.image as userImage
+     FROM CircleMember cm JOIN User u ON u.id = cm.userId WHERE cm.circleId = ? ORDER BY cm.joinedAt ASC`,
     [id]
   );
   const betCountRow = await one<any>("SELECT COUNT(*) as count FROM Bet WHERE circleId = ?", [id]);
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       owner,
       members: members.map((m: any) => ({
         ...m,
-        user: { id: m.userId, name: m.userName, image: m.userImage, chips: m.userChips },
+        user: { id: m.userId, name: m.userName, image: m.userImage },
       })),
       _count: { bets: betCount, members: members.length },
     },

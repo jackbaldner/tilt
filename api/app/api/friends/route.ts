@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const friends = await all<any>(
     `SELECT
        f.id as friendshipId,
-       u.id, u.name, u.email, u.image, u.username, u.chips,
+       u.id, u.name, u.email, u.image, u.username,
        us.totalBets, us.wonBets
      FROM Friendship f
      JOIN User u ON u.id = CASE WHEN f.requesterId = ? THEN f.addresseeId ELSE f.requesterId END

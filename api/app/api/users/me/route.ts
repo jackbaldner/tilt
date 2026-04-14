@@ -1,27 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
+import { getBalance } from "@/lib/wallet";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const user = await one<any>("SELECT * FROM User WHERE id = ?", [auth.id]);
+  const user = await one<any>("SELECT id, email, name, username, image, createdAt, updatedAt FROM User WHERE id = ?", [auth.id]);
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const stats = await one<any>("SELECT * FROM UserStats WHERE userId = ?", [auth.id]);
-  const memberships = await all<any>(
-    "SELECT cm.*, c.id as circleId, c.name as circleName, c.emoji FROM CircleMember cm JOIN Circle c ON c.id = cm.circleId WHERE cm.userId = ?",
-    [auth.id]
-  );
-  const transactions = await all<any>(
-    `SELECT * FROM "Transaction" WHERE userId = ? ORDER BY createdAt DESC LIMIT 10`,
-    [auth.id]
-  );
+  const [chips, stats, memberships, transactions] = await Promise.all([
+    getBalance(auth.id, "CHIPS"),
+    one<any>("SELECT * FROM UserStats WHERE userId = ?", [auth.id]),
+    all<any>(
+      "SELECT cm.*, c.id as circleId, c.name as circleName, c.emoji FROM CircleMember cm JOIN Circle c ON c.id = cm.circleId WHERE cm.userId = ?",
+      [auth.id]
+    ),
+    all<any>(
+      `SELECT le.id, le.amount, le.currency, le.entry_type as type, le.ref_type, le.ref_id, le.created_at as createdAt
+       FROM LedgerEntry le
+       JOIN Wallet w ON w.id = le.to_wallet_id
+       WHERE w.owner_type = 'user' AND w.owner_id = ?
+       ORDER BY le.created_at DESC LIMIT 10`,
+      [auth.id]
+    ),
+  ]);
 
   return NextResponse.json({
     user: {
       ...user,
+      chips,
       stats,
       memberships: memberships.map((m: any) => ({
         ...m,
@@ -50,5 +59,7 @@ export async function PATCH(req: NextRequest) {
     [name?.trim() ?? null, username?.trim() ?? null, image ?? null, now(), auth.id]
   );
 
-  return NextResponse.json({ user: await one("SELECT * FROM User WHERE id = ?", [auth.id]) });
+  const updatedUser = await one<any>("SELECT id, email, name, username, image, createdAt, updatedAt FROM User WHERE id = ?", [auth.id]);
+  const chips = await getBalance(auth.id, "CHIPS");
+  return NextResponse.json({ user: { ...updatedUser, chips } });
 }

@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await one<any>(
-      "SELECT id, email, name, username, chips, reset_token, reset_token_expires FROM User WHERE reset_token = ?",
+      "SELECT id, email, name, username, reset_token, reset_token_expires FROM User WHERE reset_token = ?",
       [token]
     );
 

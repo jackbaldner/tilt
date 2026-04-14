@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await one<any>(
-      "SELECT id, email, name, username, image, chips, password_hash FROM User WHERE email = ?",
+      "SELECT id, email, name, username, image, password_hash FROM User WHERE email = ?",
       [email.trim().toLowerCase()]
     );
 

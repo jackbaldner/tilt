@@ -12,7 +12,6 @@ interface UserRow {
   name: string | null;
   username: string | null;
   image: string | null;
-  chips: number;
   password_hash: string | null;
 }
 
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await one<UserRow>(
-      "SELECT id, email, name, username, image, chips, password_hash FROM User WHERE email = ?",
+      "SELECT id, email, name, username, image, password_hash FROM User WHERE email = ?",
       [email.toLowerCase().trim()]
     );
 
@@ -74,7 +73,7 @@ export async function GET(req: NextRequest) {
     const payload = verify(token, JWT_SECRET) as { sub: string };
 
     const user = await one<Omit<UserRow, "password_hash">>(
-      "SELECT id, email, name, username, image, chips FROM User WHERE id = ?",
+      "SELECT id, email, name, username, image FROM User WHERE id = ?",
       [payload.sub]
     );
 

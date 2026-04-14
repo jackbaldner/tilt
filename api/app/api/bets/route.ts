@@ -3,6 +3,7 @@ import { one, all, run, cuid, now, transaction } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
 import { sendBetChallengeEmail } from "@/lib/email";
+import { joinBet } from "@/lib/wallet";
 
 // GET /api/bets — list bets for the current user (all bets they have a side in)
 export async function GET(req: NextRequest) {
@@ -54,10 +55,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const { circleId, challengedUserId, title, description, type, stake, options, resolveAt, aiResolvable } = await req.json();
+  const { circleId, challengedUserId, title, description, type, stake, options, proposerOption, resolveAt, aiResolvable } = await req.json();
 
   if (!title || !type || !stake || !options?.length) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  if (!proposerOption) {
+    return NextResponse.json({ error: "proposerOption is required" }, { status: 400 });
   }
 
   // If a circle is specified, verify membership
@@ -66,13 +71,7 @@ export async function POST(req: NextRequest) {
     if (!membership) return NextResponse.json({ error: "Not a circle member" }, { status: 403 });
   }
 
-  const user = await one<any>("SELECT * FROM User WHERE id = ?", [auth.id]);
-  if (!user || user.chips < stake) {
-    return NextResponse.json({ error: "Not enough chips" }, { status: 400 });
-  }
-
   const betId = cuid();
-  const sideId = cuid();
   const timestamp = now();
 
   await transaction((db) => {
@@ -83,17 +82,7 @@ export async function POST(req: NextRequest) {
        type, stake, JSON.stringify(options), resolveAt ? new Date(resolveAt).toISOString() : null,
        aiResolvable ? 1 : 0, stake, timestamp, timestamp]
     );
-    db.run(
-      `INSERT INTO BetSide (id, betId, userId, option, stake, status, createdAt) VALUES (?, ?, ?, ?, ?, 'active', ?)`,
-      [sideId, betId, auth.id, options[0], stake, timestamp]
-    );
-    db.run("UPDATE User SET chips = chips - ?, updatedAt = ? WHERE id = ?", [stake, timestamp, auth.id]);
-    db.run(
-      `INSERT INTO "Transaction" (id, userId, betId, type, amount, description, createdAt) VALUES (?, ?, ?, 'bet_placed', ?, ?, ?)`,
-      [cuid(), auth.id, betId, -stake, `Placed bet: ${title}`, timestamp]
-    );
     if (circleId) {
-      db.run("UPDATE CircleMember SET chips = chips - ? WHERE circleId = ? AND userId = ?", [stake, circleId, auth.id]);
       db.run(
         "INSERT INTO Activity (id, circleId, betId, userId, type, data, createdAt) VALUES (?, ?, ?, ?, 'bet_created', ?, ?)",
         [cuid(), circleId, betId, auth.id, JSON.stringify({ betTitle: title, stake, type }), timestamp]
@@ -104,6 +93,15 @@ export async function POST(req: NextRequest) {
       [cuid(), auth.id, timestamp]
     );
     db.run("UPDATE UserStats SET totalBets = totalBets + 1, updatedAt = ? WHERE userId = ?", [timestamp, auth.id]);
+  });
+
+  const idempotencyKey = req.headers.get("idempotency-key") ?? undefined;
+  await joinBet({
+    betId,
+    userId: auth.id,
+    option: proposerOption,
+    stake,
+    idempotencyKey: idempotencyKey ? `${idempotencyKey}:proposer` : undefined,
   });
 
   const bet = await one<any>("SELECT * FROM Bet WHERE id = ?", [betId]);

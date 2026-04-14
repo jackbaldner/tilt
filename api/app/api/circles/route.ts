@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const members = await all<any>(
       `SELECT cm.*, u.id as userId, u.name as userName, u.image as userImage
        FROM CircleMember cm JOIN User u ON u.id = cm.userId
-       WHERE cm.circleId = ? ORDER BY cm.chips DESC`,
+       WHERE cm.circleId = ? ORDER BY cm.joinedAt ASC`,
       [c.id]
     );
     return {

@@ -3,6 +3,7 @@ import { sign } from "jsonwebtoken";
 import { hash } from "bcryptjs";
 import { one, run, cuid, now } from "@/lib/db";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
+import { grant, getBalance } from "@/lib/wallet";
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET ?? "tilt-super-secret-key-change-in-prod-32chars";
 
@@ -40,8 +41,8 @@ export async function POST(req: NextRequest) {
     const timestamp = now();
 
     await run(
-      `INSERT INTO User (id, email, name, username, password_hash, image, chips, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, NULL, 1000, ?, ?)`,
+      `INSERT INTO User (id, email, name, username, password_hash, image, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
       [id, emailLower, usernameTrimmed, usernameTrimmed, passwordHash, timestamp, timestamp]
     );
     await run(
@@ -49,11 +50,15 @@ export async function POST(req: NextRequest) {
        VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?)`,
       [cuid(), id, timestamp]
     );
+    await grant({ userId: id, currency: "CHIPS", amount: 1000, reason: "signup" });
 
-    const user = await one<any>("SELECT id, email, name, username, image, chips FROM User WHERE id = ?", [id]);
+    const [user, chips] = await Promise.all([
+      one<any>("SELECT id, email, name, username, image FROM User WHERE id = ?", [id]),
+      getBalance(id, "CHIPS"),
+    ]);
     const token = sign({ sub: id, email: emailLower }, JWT_SECRET, { expiresIn: "90d" });
 
-    return NextResponse.json({ token, user }, { status: 201 });
+    return NextResponse.json({ token, user: { ...user, chips } }, { status: 201 });
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
