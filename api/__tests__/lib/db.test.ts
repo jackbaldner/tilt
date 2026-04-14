@@ -37,4 +37,21 @@ describe("interactiveTransaction", () => {
     const after = await one<{ n: number }>("SELECT n FROM counter WHERE id = ?", ["a"]);
     expect(after?.n).toBe(5);
   });
+
+  it("rolls back when SQL itself fails mid-transaction", async () => {
+    const { run, one, interactiveTransaction } = await import("../../lib/db");
+    await run("CREATE TABLE counter (id TEXT PRIMARY KEY, n INTEGER NOT NULL)");
+    await run("INSERT INTO counter (id, n) VALUES ('a', 5)");
+
+    await expect(
+      interactiveTransaction(async (tx) => {
+        await tx.run("UPDATE counter SET n = 99 WHERE id = ?", ["a"]);
+        // Constraint violation: PRIMARY KEY conflict
+        await tx.run("INSERT INTO counter (id, n) VALUES ('a', 1)");
+      })
+    ).rejects.toThrow();
+
+    const after = await one<{ n: number }>("SELECT n FROM counter WHERE id = ?", ["a"]);
+    expect(after?.n).toBe(5);
+  });
 });

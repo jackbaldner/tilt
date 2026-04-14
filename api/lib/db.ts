@@ -173,7 +173,7 @@ export async function interactiveTransaction<T>(
       await tx.commit();
       return result;
     } catch (err) {
-      await tx.rollback();
+      try { await tx.rollback(); } catch { /* swallow rollback error */ }
       throw err;
     }
   }
@@ -182,7 +182,10 @@ export async function interactiveTransaction<T>(
   // async fn between the transaction boundaries. The helpers call the sync
   // better-sqlite3 API and wrap results in resolved Promises.
   const db = getLocalDb();
-  db.prepare("BEGIN").run();
+  if (db.inTransaction) {
+    throw new Error("interactiveTransaction cannot be nested");
+  }
+  db.prepare("BEGIN IMMEDIATE").run();
   try {
     const helpers: InteractiveTx = {
       run: async (sql, params) => {
@@ -201,7 +204,7 @@ export async function interactiveTransaction<T>(
     db.prepare("COMMIT").run();
     return result;
   } catch (err) {
-    db.prepare("ROLLBACK").run();
+    try { db.prepare("ROLLBACK").run(); } catch { /* swallow rollback error */ }
     throw err;
   }
 }
