@@ -3,5 +3,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
-  "public": true
+  "public": true,
+  "crons": [
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "0 7 * * *"
+    }
+  ]
 }
