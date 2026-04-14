@@ -40,6 +40,14 @@ async function getLibsqlClient() {
 
 const DB_PATH = process.env.SQLITE_PATH ?? "/Users/jackbaldner/tilt/api/prisma/dev.db";
 
+// Mutex chain for serializing local interactiveTransaction calls.
+// libSQL/Turso handles serialization server-side; this only applies to the
+// better-sqlite3 path where we manually open transactions with BEGIN IMMEDIATE.
+// Without this, parallel async callers would race between awaits and trigger
+// the nested-transaction guard or a SQLite "cannot start a transaction within
+// a transaction" error.
+let localTxMutex: Promise<unknown> = Promise.resolve();
+
 let localDb: import("better-sqlite3").Database | null = null;
 
 function getLocalDb() {
@@ -178,34 +186,48 @@ export async function interactiveTransaction<T>(
     }
   }
 
-  // better-sqlite3: use manual BEGIN/COMMIT/ROLLBACK so we can await the user's
-  // async fn between the transaction boundaries. The helpers call the sync
-  // better-sqlite3 API and wrap results in resolved Promises.
-  const db = getLocalDb();
-  if (db.inTransaction) {
-    throw new Error("interactiveTransaction cannot be nested");
-  }
-  db.prepare("BEGIN IMMEDIATE").run();
+  // better-sqlite3: serialize via mutex so parallel async callers queue cleanly.
+  // Each caller enqueues itself behind the previous one; the chain never stalls
+  // because release() always fires in the finally block.
+  const previous = localTxMutex;
+  let release!: (value?: unknown) => void;
+  localTxMutex = new Promise((resolve) => { release = resolve; });
+
   try {
-    const helpers: InteractiveTx = {
-      run: async (sql, params) => {
-        db.prepare(sql).run(...(params ?? []));
-      },
-      one: async <R>(sql: string, params?: unknown[]) => {
-        const stmt = db.prepare(sql);
-        return (params ? stmt.get(...params) : stmt.get()) as R | null;
-      },
-      all: async <R>(sql: string, params?: unknown[]) => {
-        const stmt = db.prepare(sql);
-        return (params ? stmt.all(...params) : stmt.all()) as R[];
-      },
-    };
-    const result = await fn(helpers);
-    db.prepare("COMMIT").run();
-    return result;
-  } catch (err) {
-    try { db.prepare("ROLLBACK").run(); } catch { /* swallow rollback error */ }
-    throw err;
+    await previous; // wait for any in-flight transaction to finish
+
+    // Nested-transaction guard: catches programmer errors where someone calls
+    // interactiveTransaction from inside another interactiveTransaction
+    // synchronously. The mutex handles the parallel/async case; this handles
+    // the truly-nested case.
+    const db = getLocalDb();
+    if (db.inTransaction) {
+      throw new Error("interactiveTransaction cannot be nested");
+    }
+    db.prepare("BEGIN IMMEDIATE").run();
+    try {
+      const helpers: InteractiveTx = {
+        run: async (sql, params) => {
+          db.prepare(sql).run(...(params ?? []));
+        },
+        one: async <R>(sql: string, params?: unknown[]) => {
+          const stmt = db.prepare(sql);
+          return (params ? stmt.get(...params) : stmt.get()) as R | null;
+        },
+        all: async <R>(sql: string, params?: unknown[]) => {
+          const stmt = db.prepare(sql);
+          return (params ? stmt.all(...params) : stmt.all()) as R[];
+        },
+      };
+      const result = await fn(helpers);
+      db.prepare("COMMIT").run();
+      return result;
+    } catch (err) {
+      try { db.prepare("ROLLBACK").run(); } catch { /* swallow rollback error */ }
+      throw err;
+    }
+  } finally {
+    release(); // always unblock the next queued caller
   }
 }
 

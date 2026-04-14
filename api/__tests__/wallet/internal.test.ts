@@ -149,16 +149,14 @@ describe("wallet/internal", () => {
   });
 
   it("getOrCreateWallet handles concurrent calls cleanly", async () => {
-    // better-sqlite3 is single-threaded so true parallel transactions are
-    // serialized by the JS event loop. We verify idempotency by firing three
-    // calls sequentially (via Promise.allSettled on already-resolved promises)
-    // and asserting all three return the same wallet ID.
     const { ensureWalletSchema } = await import("../../lib/wallet/migrate");
     const { getOrCreateWallet } = await import("../../lib/wallet/internal");
     await ensureWalletSchema();
-    const w1 = await getOrCreateWallet("user", "concurrent", "CHIPS");
-    const w2 = await getOrCreateWallet("user", "concurrent", "CHIPS");
-    const w3 = await getOrCreateWallet("user", "concurrent", "CHIPS");
+    const [w1, w2, w3] = await Promise.all([
+      getOrCreateWallet("user", "concurrent", "CHIPS"),
+      getOrCreateWallet("user", "concurrent", "CHIPS"),
+      getOrCreateWallet("user", "concurrent", "CHIPS"),
+    ]);
     expect(w1.id).toBe(w2.id);
     expect(w2.id).toBe(w3.id);
   });

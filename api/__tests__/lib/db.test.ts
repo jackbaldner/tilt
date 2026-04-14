@@ -54,4 +54,22 @@ describe("interactiveTransaction", () => {
     const after = await one<{ n: number }>("SELECT n FROM counter WHERE id = ?", ["a"]);
     expect(after?.n).toBe(5);
   });
+
+  it("serializes parallel calls without nested-transaction errors", async () => {
+    const { run, interactiveTransaction } = await import("../../lib/db");
+    await run("CREATE TABLE counter (id TEXT PRIMARY KEY, n INTEGER NOT NULL)");
+    await run("INSERT INTO counter (id, n) VALUES ('a', 0)");
+
+    const inc = () =>
+      interactiveTransaction(async (tx) => {
+        const row = await tx.one<{ n: number }>("SELECT n FROM counter WHERE id = 'a'");
+        await tx.run("UPDATE counter SET n = ? WHERE id = 'a'", [(row?.n ?? 0) + 1]);
+      });
+
+    await Promise.all([inc(), inc(), inc(), inc(), inc()]);
+
+    const { one } = await import("../../lib/db");
+    const final = await one<{ n: number }>("SELECT n FROM counter WHERE id = 'a'");
+    expect(final?.n).toBe(5);
+  });
 });
