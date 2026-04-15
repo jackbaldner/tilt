@@ -50,11 +50,11 @@ describe("1:1 side-lock integration", () => {
       "SELECT option FROM BetSide WHERE betId = ?",
       ["b1"]
     );
-    const blocked = shouldBlockJoin("__private__alice__bob", sides, "Yes");
+    const blocked = shouldBlockJoin(true, sides, "Yes");
     expect(blocked.blocked).toBe(true);
     expect(blocked.reason).toMatch(/already taken/i);
 
-    const allowed = shouldBlockJoin("__private__alice__bob", sides, "No");
+    const allowed = shouldBlockJoin(true, sides, "No");
     expect(allowed.blocked).toBe(false);
   });
 
@@ -71,7 +71,7 @@ describe("1:1 side-lock integration", () => {
     await wallet.joinBet({ betId: "b1", userId: "alice", option: "Yes", stake: 50 });
 
     const sides = await all<{ option: string }>("SELECT option FROM BetSide WHERE betId = ?", ["b1"]);
-    const result = shouldBlockJoin("Fantasy League", sides, "Yes");
+    const result = shouldBlockJoin(false, sides, "Yes");
     expect(result.blocked).toBe(false);
 
     // And the wallet layer actually lets bob join the same option (we
@@ -99,14 +99,14 @@ describe("1:1 side-lock integration", () => {
 
     // Bob checks the other side — not blocked
     let sides = await all<{ option: string }>("SELECT option FROM BetSide WHERE betId = ?", ["b1"]);
-    expect(shouldBlockJoin("__private__alice__bob", sides, "No").blocked).toBe(false);
+    expect(shouldBlockJoin(true, sides, "No").blocked).toBe(false);
 
     await wallet.joinBet({ betId: "b1", userId: "bob", option: "No", stake: 50 });
 
     // Now both sides are taken; any further attempt to join either side should be blocked
     sides = await all<{ option: string }>("SELECT option FROM BetSide WHERE betId = ?", ["b1"]);
-    expect(shouldBlockJoin("__private__alice__bob", sides, "Yes").blocked).toBe(true);
-    expect(shouldBlockJoin("__private__alice__bob", sides, "No").blocked).toBe(true);
+    expect(shouldBlockJoin(true, sides, "Yes").blocked).toBe(true);
+    expect(shouldBlockJoin(true, sides, "No").blocked).toBe(true);
 
     // Resolve — normal resolve flow works
     const result = await wallet.resolveBet({ betId: "b1", winningOption: "Yes" });

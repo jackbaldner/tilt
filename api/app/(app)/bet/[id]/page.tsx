@@ -48,7 +48,7 @@ interface Bet {
   resolveAt?: string;
   options: string[];
   proposer: BetUser;
-  circle: { id: string; name: string; emoji: string };
+  circle: { id: string; name: string; emoji: string; memberCount?: number } | null;
   sides: BetSide[];
   comments: Comment[];
   disputes: Dispute[];
@@ -169,12 +169,37 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
     setPostingComment(false);
   }
 
-  function copyShareLink() {
+  async function copyShareLink() {
     const url = `${window.location.origin}/bet/${betId}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setShareMsg("Copied!");
-      setTimeout(() => setShareMsg(""), 2000);
-    });
+    const title = bet?.title ? `Tilt bet: ${bet.title}` : "Tilt bet";
+
+    // Prefer Web Share API on mobile (opens native share sheet)
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      try {
+        await (navigator as any).share({ title, url });
+        return;
+      } catch (err: any) {
+        // User cancelled the share sheet, or share failed. Fall through
+        // to clipboard fallback only if it wasn't a deliberate cancel.
+        if (err?.name === "AbortError") return;
+      }
+    }
+
+    // Fallback: clipboard API
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setShareMsg("Copied!");
+        setTimeout(() => setShareMsg(""), 2000);
+        return;
+      }
+    } catch {
+      // Clipboard failed, fall through
+    }
+
+    // Last-resort fallback: show the URL so the user can copy it manually
+    setShareMsg(url);
+    setTimeout(() => setShareMsg(""), 8000);
   }
 
   if (loading) {
@@ -208,7 +233,9 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
     sidesByOption[s.option].push(s);
   }
 
-  const is1v1 = isPrivateCircleName(bet.circle?.name);
+  const is1v1 = bet
+    ? (isPrivateCircleName(bet.circle?.name) || (bet.circle?.memberCount ?? 0) === 2)
+    : false;
   // For 1:1 mode: first taker per option (at most one in a private circle)
   const firstTakerByOption: Record<string, BetSide | undefined> = {};
   for (const opt of bet.options) {

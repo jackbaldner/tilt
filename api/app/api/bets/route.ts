@@ -102,16 +102,25 @@ export async function POST(req: NextRequest) {
     if (!membership) return NextResponse.json({ error: "Not a circle member" }, { status: 403 });
   }
 
-  // If this bet is going into a private (1:1) friend-challenge circle,
-  // the options must be exactly 2 (the two sides of the challenge).
+  // If this bet is going into a 1:1 context (a __private__ friend-
+  // challenge circle OR any circle with exactly 2 members), the options
+  // must be exactly 2 (the two sides of the head-to-head).
   if (circleId) {
     const circle = await one<{ name: string }>(
       "SELECT name FROM Circle WHERE id = ?",
       [circleId]
     );
-    if (circle && isPrivateCircleName(circle.name)) {
-      const privateResult = validateOptionsArray(normalizedOptions, { requireExactly: 2 });
-      if (!privateResult.ok) {
+    const memberCountRow = await one<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM CircleMember WHERE circleId = ?",
+      [circleId]
+    );
+    const memberCount = memberCountRow?.count ?? 0;
+    const isOneOnOne =
+      (circle && isPrivateCircleName(circle.name)) || memberCount === 2;
+
+    if (isOneOnOne) {
+      const binaryResult = validateOptionsArray(normalizedOptions, { requireExactly: 2 });
+      if (!binaryResult.ok) {
         return NextResponse.json(
           { error: "1:1 challenges must have exactly 2 options" },
           { status: 400 }

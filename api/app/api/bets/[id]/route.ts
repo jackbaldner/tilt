@@ -35,6 +35,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const circle = bet.circleId
     ? await one<any>("SELECT id, name, emoji FROM Circle WHERE id = ?", [bet.circleId])
     : null;
+  const circleMemberCount = bet.circleId
+    ? (await one<{ count: number }>("SELECT COUNT(*) AS count FROM CircleMember WHERE circleId = ?", [bet.circleId]))?.count ?? 0
+    : 0;
   const disputes = await all<any>("SELECT * FROM Dispute WHERE betId = ?", [id]);
 
   return NextResponse.json({
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ...bet,
       options: JSON.parse(bet.options),
       proposer,
-      circle,
+      circle: circle ? { ...circle, memberCount: circleMemberCount } : null,
       sides: sides.map((s: any) => ({
         ...s,
         user: { id: s.userId, name: s.userName, username: s.userUsername, image: s.userImage },

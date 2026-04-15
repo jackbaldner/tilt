@@ -202,11 +202,37 @@ export default function NewBetPage() {
     setSubmitting(true);
     setError("");
 
+    let effectiveCircleId: string | undefined = prefilledCircle?.id ?? undefined;
+
+    // If no circle prefill but a specific friend is selected, route via
+    // the friend-challenge flow to create or reuse the private 1:1 circle
+    // (same as mobile). This makes the bet a true 1:1 with side-lock
+    // enforcement, rather than just a "notify this friend" group bet.
+    if (!effectiveCircleId && selectedFriend) {
+      try {
+        const challengeRes = await authFetch(
+          `/api/friends/${selectedFriend.friendshipId}/challenge`,
+          { method: "POST" }
+        );
+        if (!challengeRes.ok) {
+          setError("Couldn't open 1:1 challenge circle");
+          setSubmitting(false);
+          return;
+        }
+        const challengeData = await challengeRes.json();
+        effectiveCircleId = challengeData.circleId;
+      } catch {
+        setError("Network error opening challenge circle");
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       const res = await authFetch("/api/bets", {
         method: "POST",
         body: JSON.stringify({
-          circleId: prefilledCircle?.id ?? undefined,
+          circleId: effectiveCircleId,
           challengedUserId: selectedFriend?.id ?? undefined,
           title: title.trim(),
           description: description.trim() || undefined,

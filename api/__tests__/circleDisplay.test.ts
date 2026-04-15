@@ -77,29 +77,24 @@ describe("resolveCircleDisplay", () => {
 });
 
 describe("shouldBlockJoin", () => {
-  it("does not block joins in non-private (group) circles", () => {
-    const result = shouldBlockJoin("Fantasy League", [{ option: "Yes" }], "Yes");
+  it("does not block joins in non-1v1 (group) circles", () => {
+    const result = shouldBlockJoin(false, [{ option: "Yes" }], "Yes");
     expect(result.blocked).toBe(false);
   });
 
-  it("does not block joins in private circles when the option is still available", () => {
-    const result = shouldBlockJoin("__private__abc", [{ option: "Yes" }], "No");
+  it("does not block joins in 1:1 when the option is still available", () => {
+    const result = shouldBlockJoin(true, [{ option: "Yes" }], "No");
     expect(result.blocked).toBe(false);
   });
 
-  it("blocks joins in private circles when the option is already taken", () => {
-    const result = shouldBlockJoin("__private__abc", [{ option: "Yes" }], "Yes");
+  it("blocks joins in 1:1 when the option is already taken", () => {
+    const result = shouldBlockJoin(true, [{ option: "Yes" }], "Yes");
     expect(result.blocked).toBe(true);
     expect(result.reason).toMatch(/already taken/i);
   });
 
-  it("handles null circle name (bet with no circle) as non-private", () => {
-    const result = shouldBlockJoin(null, [{ option: "Yes" }], "Yes");
-    expect(result.blocked).toBe(false);
-  });
-
-  it("handles undefined circle name as non-private", () => {
-    const result = shouldBlockJoin(undefined, [{ option: "Yes" }], "Yes");
+  it("allows joins when isOneOnOne is false regardless of taken state", () => {
+    const result = shouldBlockJoin(false, [{ option: "Yes" }], "Yes");
     expect(result.blocked).toBe(false);
   });
 });

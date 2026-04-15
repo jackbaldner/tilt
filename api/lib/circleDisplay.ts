@@ -66,16 +66,16 @@ export interface SideLockCheck {
 
 /**
  * Decide whether a user's attempt to join an option should be blocked.
- * In private (1:1) circles, each side is limited to exactly one joiner
- * — so if the chosen option already has a taker, the join is blocked.
- * Group circles and circle-less bets have no such rule.
+ * In 1:1 bets (either a __private__ friend-challenge circle OR any
+ * circle that currently has exactly 2 members), each side is limited
+ * to exactly one joiner. Group circles (3+ members) have no such rule.
  */
 export function shouldBlockJoin(
-  circleName: string | null | undefined,
+  isOneOnOne: boolean,
   existingSides: Array<{ option: string }>,
   optionToJoin: string
 ): SideLockCheck {
-  if (!isPrivateCircleName(circleName)) {
+  if (!isOneOnOne) {
     return { blocked: false };
   }
   const taken = existingSides.some((s) => s.option === optionToJoin);
