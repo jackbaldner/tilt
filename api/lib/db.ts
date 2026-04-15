@@ -37,8 +37,25 @@ async function getLibsqlClient() {
 }
 
 // ─── better-sqlite3 (local) path ─────────────────────────────────────────────
+//
+// Only reachable when TURSO_DATABASE_URL is not set (i.e. local dev and tests).
+// In production on Vercel we always go through the libSQL path above, and
+// falling through to better-sqlite3 would be an ephemeral filesystem bug —
+// so we fail loud instead of silently opening a throwaway DB.
 
-const DB_PATH = process.env.SQLITE_PATH ?? "/Users/jackbaldner/tilt/api/prisma/dev.db";
+function resolveLocalDbPath(): string {
+  const env = process.env.SQLITE_PATH;
+  if (env) return env;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "better-sqlite3 path reached in production without SQLITE_PATH set. This means TURSO_DATABASE_URL is missing. Check your Vercel environment variables."
+    );
+  }
+  // Dev default — resolved relative to the api/ workspace rather than a
+  // hardcoded absolute path that only works on one machine.
+  const path = require("path") as typeof import("path");
+  return path.join(process.cwd(), "prisma", "dev.db");
+}
 
 // Mutex chain for serializing local interactiveTransaction calls.
 // libSQL/Turso handles serialization server-side; this only applies to the
@@ -55,7 +72,7 @@ function getLocalDb() {
     // Dynamic require so the module is never loaded when running on Turso
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Database = require("better-sqlite3");
-    localDb = new Database(DB_PATH);
+    localDb = new Database(resolveLocalDbPath());
     (localDb as any).pragma("journal_mode = WAL");
     (localDb as any).pragma("foreign_keys = ON");
   }
@@ -110,13 +127,24 @@ export async function transaction<T>(fn: (helpers: {
     const statements: Array<{ sql: string; args: import("@libsql/client").InValue[] }> = [];
     let result: T;
 
-    // We run fn synchronously collecting statements, then batch-execute
+    // We run fn synchronously collecting statements, then batch-execute.
+    // IMPORTANT: reads inside a batched transaction are NOT supported on
+    // Turso — the statements don't execute until the batch commits. Use
+    // interactiveTransaction() instead when you need to read within a tx.
     const helpers = {
       run: (sql: string, params?: unknown[]) => {
         statements.push({ sql, args: (params ?? []) as import("@libsql/client").InValue[] });
       },
-      one: <R>(_sql: string, _params?: unknown[]): R | null => null, // reads inside transactions not supported in batch mode
-      all: <R>(_sql: string, _params?: unknown[]): R[] => [],
+      one: <R>(_sql: string, _params?: unknown[]): R | null => {
+        throw new Error(
+          "transaction() does not support reads on Turso (statements are batched and don't execute until commit). Use interactiveTransaction() instead."
+        );
+      },
+      all: <R>(_sql: string, _params?: unknown[]): R[] => {
+        throw new Error(
+          "transaction() does not support reads on Turso (statements are batched and don't execute until commit). Use interactiveTransaction() instead."
+        );
+      },
     };
     result = fn(helpers);
     if (statements.length > 0) {

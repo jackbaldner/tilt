@@ -36,15 +36,23 @@ function Avatar({ name, image, size = "md" }: { name: string; image?: string; si
   );
 }
 
+interface PrefillCircle {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
 export default function NewBetPage() {
   const { user } = useAuth();
   const { authFetch } = useApiClient();
   const router = useRouter();
   const params = useSearchParams();
   const prefilledUserId = params.get("userId");
+  const prefilledCircleId = params.get("circleId");
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [prefilledCircle, setPrefilledCircle] = useState<PrefillCircle | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [stake, setStake] = useState(50);
@@ -70,6 +78,25 @@ export default function NewBetPage() {
       }
     });
   }, [authFetch, prefilledUserId]);
+
+  // Load the prefilled circle (if ?circleId= in URL) so we can both (a)
+  // show a "posting to X" chip in the header and (b) actually include
+  // the circleId in the POST body. Without this, bets created from a
+  // circle page get orphaned into the user's top-level bet list.
+  useEffect(() => {
+    if (!prefilledCircleId) return;
+    authFetch(`/api/circles/${prefilledCircleId}`).then(async (res) => {
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.circle) {
+        setPrefilledCircle({
+          id: data.circle.id,
+          name: data.circle.name,
+          emoji: data.circle.emoji,
+        });
+      }
+    });
+  }, [authFetch, prefilledCircleId]);
 
   const fetchSuggestions = useCallback(async () => {
     setLoadingSuggestions(true);
@@ -131,6 +158,7 @@ export default function NewBetPage() {
       const res = await authFetch("/api/bets", {
         method: "POST",
         body: JSON.stringify({
+          circleId: prefilledCircle?.id ?? undefined,
           challengedUserId: selectedFriend?.id ?? undefined,
           title: title.trim(),
           description: description.trim() || undefined,
@@ -160,7 +188,7 @@ export default function NewBetPage() {
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-4">
         <button
           onClick={() => router.back()}
           className="w-9 h-9 rounded-xl bg-surface border border-border flex items-center justify-center text-muted hover:text-text transition-colors"
@@ -171,6 +199,17 @@ export default function NewBetPage() {
         </button>
         <h1 className="text-xl font-bold text-text">New Bet</h1>
       </div>
+
+      {/* Prefilled circle context — show the user which circle this bet will land in */}
+      {prefilledCircle && (
+        <div className="mb-4 flex items-center justify-between gap-2 bg-accent/5 border border-accent/20 rounded-xl px-3 py-2 text-sm">
+          <span className="text-muted">Posting to</span>
+          <span className="text-text font-medium flex items-center gap-1.5">
+            <span>{prefilledCircle.emoji}</span>
+            <span>{prefilledCircle.name}</span>
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
 

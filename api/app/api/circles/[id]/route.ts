@@ -47,10 +47,66 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!circle) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (circle.ownerId !== auth.id) return NextResponse.json({ error: "Not owner" }, { status: 403 });
 
-  const { name, description, emoji } = await req.json();
+  // __private__ circles are the internal containers for 1:1 friend
+  // challenges. Their `name` field encodes a deterministic key that the
+  // challenge lookup uses to reuse the same circle for a given pair of
+  // users. Renaming one breaks that lookup and orphans bets. Block the
+  // edit entirely rather than trying to partially allow it.
+  if (circle.name?.startsWith("__private__")) {
+    return NextResponse.json(
+      { error: "Private friend-challenge circles can't be edited" },
+      { status: 400 }
+    );
+  }
+
+  const body = await req.json();
+
+  // Distinguish "field was omitted" (undefined → keep existing) from
+  // "field was explicitly cleared" (null or empty string → set to null).
+  // Using COALESCE blindly would prevent ever clearing a description.
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  if (typeof body.name === "string") {
+    const trimmed = body.name.trim();
+    if (!trimmed) {
+      return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+    }
+    if (trimmed.startsWith("__private__")) {
+      return NextResponse.json(
+        { error: "Name cannot start with the reserved prefix __private__" },
+        { status: 400 }
+      );
+    }
+    updates.push("name = ?");
+    values.push(trimmed);
+  }
+
+  if (body.description !== undefined) {
+    if (body.description === null || body.description === "") {
+      updates.push("description = NULL");
+    } else if (typeof body.description === "string") {
+      updates.push("description = ?");
+      values.push(body.description.trim());
+    }
+  }
+
+  if (typeof body.emoji === "string" && body.emoji.trim()) {
+    updates.push("emoji = ?");
+    values.push(body.emoji.trim());
+  }
+
+  if (updates.length === 0) {
+    return NextResponse.json({ circle });
+  }
+
+  updates.push("updatedAt = ?");
+  values.push(now());
+  values.push(id);
+
   await run(
-    `UPDATE Circle SET name = COALESCE(?, name), description = COALESCE(?, description), emoji = COALESCE(?, emoji), updatedAt = ? WHERE id = ?`,
-    [name?.trim() ?? null, description?.trim() ?? null, emoji ?? null, now(), id]
+    `UPDATE Circle SET ${updates.join(", ")} WHERE id = ?`,
+    values
   );
 
   return NextResponse.json({ circle: await one("SELECT * FROM Circle WHERE id = ?", [id]) });

@@ -42,10 +42,29 @@ describe("wallet.refundBet", () => {
     expect(await wallet.getBalance("alice", "CHIPS")).toBe(1000);
   });
 
-  it("returns empty array when no sides exist", async () => {
+  it("returns an empty result when no sides exist", async () => {
     const wallet = await setup();
     const result = await wallet.refundBet({ betId: "b1", reason: "lone_joiner" });
-    expect(result).toEqual([]);
+    if (result === "duplicate") throw new Error("expected result, got duplicate");
+    expect(result.refunds).toEqual([]);
+    expect(result.entryIds).toEqual([]);
+  });
+
+  it("returns a detailed refund map when sides exist", async () => {
+    const wallet = await setup();
+    await wallet.joinBet({ betId: "b1", userId: "alice", option: "yes", stake: 50 });
+    await wallet.joinBet({ betId: "b1", userId: "bob", option: "no", stake: 50 });
+
+    const result = await wallet.refundBet({ betId: "b1", reason: "tie" });
+    if (result === "duplicate") throw new Error("expected result, got duplicate");
+    expect(result.refunds).toHaveLength(2);
+    // Sorted by createdAt ASC, so alice (joined first) comes before bob
+    expect(result.refunds[0].userId).toBe("alice");
+    expect(result.refunds[0].amount).toBe(50);
+    expect(result.refunds[0].entryId).toBeTruthy();
+    expect(result.refunds[1].userId).toBe("bob");
+    expect(result.refunds[1].amount).toBe(50);
+    expect(result.entryIds).toHaveLength(2);
   });
 
   it("handles single-joiner refund (lone_joiner case)", async () => {

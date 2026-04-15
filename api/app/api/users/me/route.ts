@@ -17,13 +17,39 @@ export async function GET(req: NextRequest) {
       "SELECT cm.*, c.id as circleId, c.name as circleName, c.emoji FROM CircleMember cm JOIN Circle c ON c.id = cm.circleId WHERE cm.userId = ?",
       [auth.id]
     ),
-    all<any>(
-      `SELECT le.id, le.amount, le.currency, le.entry_type as type, le.ref_type, le.ref_id, le.created_at as createdAt
-       FROM LedgerEntry le
-       JOIN Wallet w ON w.id = le.to_wallet_id
-       WHERE w.owner_type = 'user' AND w.owner_id = ?
-       ORDER BY le.created_at DESC LIMIT 10`,
-      [auth.id]
+    // Show BOTH credits (user was the destination — grants, winnings,
+    // refunds) and debits (user was the source — joining bets). `direction`
+    // is 'credit' when chips came IN and 'debit' when they went OUT, and
+    // `signedAmount` is positive/negative for direct display.
+    all<{
+      id: string;
+      amount: number;
+      signedAmount: number;
+      direction: "credit" | "debit";
+      currency: string;
+      type: string;
+      ref_type: string | null;
+      ref_id: string | null;
+      createdAt: string;
+    }>(
+      `SELECT id, amount, signedAmount, direction, currency, type, ref_type, ref_id, createdAt FROM (
+        SELECT le.id, le.amount, le.amount AS signedAmount, 'credit' AS direction,
+               le.currency, le.entry_type AS type, le.ref_type, le.ref_id,
+               le.created_at AS createdAt
+        FROM LedgerEntry le
+        JOIN Wallet w ON w.id = le.to_wallet_id
+        WHERE w.owner_type = 'user' AND w.owner_id = ?
+        UNION ALL
+        SELECT le.id, le.amount, -le.amount AS signedAmount, 'debit' AS direction,
+               le.currency, le.entry_type AS type, le.ref_type, le.ref_id,
+               le.created_at AS createdAt
+        FROM LedgerEntry le
+        JOIN Wallet w ON w.id = le.from_wallet_id
+        WHERE w.owner_type = 'user' AND w.owner_id = ?
+      )
+      ORDER BY createdAt DESC
+      LIMIT 20`,
+      [auth.id, auth.id]
     ),
   ]);
 

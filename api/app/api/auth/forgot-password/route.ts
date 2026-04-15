@@ -4,7 +4,23 @@ import { one, run } from "@/lib/db";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
 import { sendPasswordResetEmail } from "@/lib/email";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://api-three-vert-96.vercel.app";
+/**
+ * Resolve the public app URL for email links. In development we fall
+ * back to localhost; in production we require NEXT_PUBLIC_APP_URL to be
+ * set so password reset emails never ship a stale hardcoded URL. If the
+ * env var is missing in production we fail loud at request time rather
+ * than silently email users a broken link.
+ */
+function getAppUrl(): string {
+  const env = process.env.NEXT_PUBLIC_APP_URL;
+  if (env) return env;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "NEXT_PUBLIC_APP_URL is not set in production — password reset emails would contain an invalid URL"
+    );
+  }
+  return "http://localhost:3000";
+}
 
 // POST /api/auth/forgot-password
 export async function POST(req: NextRequest) {
@@ -35,7 +51,7 @@ export async function POST(req: NextRequest) {
       user.id,
     ]);
 
-    const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+    const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
     const displayName = user.username ?? user.name ?? "there";
 
     await sendPasswordResetEmail({

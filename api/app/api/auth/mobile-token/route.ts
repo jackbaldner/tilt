@@ -3,6 +3,7 @@ import { sign, verify } from "jsonwebtoken";
 import { compare } from "bcryptjs";
 import { one, run, cuid, now } from "@/lib/db";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
+import { getBalance } from "@/lib/wallet";
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET ?? "tilt-super-secret-key-change-in-prod-32chars";
 
@@ -81,7 +82,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ user });
+    const chips = await getBalance(user.id, "CHIPS");
+    return NextResponse.json({ user: { ...user, chips } });
   } catch (error) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }

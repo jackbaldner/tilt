@@ -288,7 +288,7 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
                 <ShareIcon />
                 {shareMsg || "Invite"}
               </button>
-              {user && circle.ownerId === user.id && (
+              {user && circle.ownerId === user.id && !circle.name.startsWith("__private__") && (
                 <button
                   onClick={startEditing}
                   className="text-sm text-muted bg-surface border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"
