@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { one, cuid, now, interactiveTransaction } from "@/lib/db";
+import { one, all, cuid, now, interactiveTransaction } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
+import { shouldBlockJoin } from "@/lib/circleDisplay";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
 import { sendBetJoinedEmail } from "@/lib/email";
 import { joinBetInTx, InsufficientFundsError } from "@/lib/wallet";
@@ -43,6 +44,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (existingSide) {
     const existingUser = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [auth.id]);
     return NextResponse.json({ side: { ...existingSide, user: existingUser } });
+  }
+
+  // 1:1 side-lock: in private circles, each option can hold at most one
+  // joiner. Look up the circle name + the options already taken, then
+  // consult the pure `shouldBlockJoin` rule. Reject cleanly before we
+  // open a transaction.
+  if (bet.circleId) {
+    const circle = await one<{ name: string }>(
+      "SELECT name FROM Circle WHERE id = ?",
+      [bet.circleId]
+    );
+    if (circle?.name) {
+      const currentSides = await all<{ option: string }>(
+        "SELECT option FROM BetSide WHERE betId = ?",
+        [betId]
+      );
+      const lock = shouldBlockJoin(circle.name, currentSides, option);
+      if (lock.blocked) {
+        return NextResponse.json(
+          { error: lock.reason ?? "That side is already taken" },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   const idempotencyKey = req.headers.get("idempotency-key") ?? undefined;
