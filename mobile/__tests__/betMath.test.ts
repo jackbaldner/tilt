@@ -41,4 +41,8 @@ describe("isBetUneven", () => {
   it("ignores counts for options not in the declared options array", () => {
     expect(isBetUneven({ yes: 1, no: 1, foo: 5 }, ["yes", "no"])).toBe(false);
   });
+
+  it("returns false for a single-option bet (nothing to be uneven against)", () => {
+    expect(isBetUneven({ a: 3 }, ["a"])).toBe(false);
+  });
 });
