@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { getBalance } from "@/lib/wallet";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(req);
@@ -27,9 +28,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({
     user: { ...user, chips, stats },
-    recentBets: recentBets.map((rb: any) => ({
-      ...rb,
-      bet: { id: rb.betId, title: rb.betTitle, resolution: rb.resolution, resolvedAt: rb.resolvedAt, circle: { id: rb.circleId, name: rb.circleName } },
-    })),
+    recentBets: recentBets.map((rb: any) => {
+      const circleIsPrivate = isPrivateCircleName(rb.circleName);
+      return {
+        ...rb,
+        bet: {
+          id: rb.betId,
+          title: rb.betTitle,
+          resolution: rb.resolution,
+          resolvedAt: rb.resolvedAt,
+          circle: circleIsPrivate ? null : { id: rb.circleId, name: rb.circleName },
+        },
+      };
+    }),
   });
 }

@@ -157,7 +157,7 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
 
   function startEditing() {
     if (!circle) return;
-    setEditName(circle.name);
+    setEditName((circle as any)._rawName ?? circle.name);
     setEditDescription(circle.description ?? "");
     setEditEmoji(circle.emoji);
     setEditError("");
@@ -316,7 +316,7 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
                 <ShareIcon />
                 {shareMsg || "Invite"}
               </button>
-              {user && circle.ownerId === user.id && !circle.name.startsWith("__private__") && (
+              {user && circle.ownerId === user.id && !((circle as any).isPrivate) && (
                 <button
                   onClick={startEditing}
                   className="text-sm text-muted bg-surface border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"

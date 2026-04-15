@@ -457,7 +457,11 @@ export default function CreateBetScreen() {
                 <Text style={{ color: Colors.text.primary, flex: 1, fontSize: 15 }}>{opt}</Text>
                 {betType !== "yes_no" && betType !== "over_under" && (
                   <TouchableOpacity
-                    onPress={() => setOptions(options.filter((_, idx) => idx !== i))}
+                    onPress={() => {
+                      const removed = options[i];
+                      setOptions(options.filter((_, idx) => idx !== i));
+                      if (proposerOption === removed) setProposerOption(null);
+                    }}
                   >
                     <Ionicons name="close-circle" size={20} color={Colors.loss} />
                   </TouchableOpacity>

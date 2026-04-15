@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { getBalance } from "@/lib/wallet";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -53,12 +54,15 @@ export async function GET(req: NextRequest) {
     ),
   ]);
 
+  // Exclude private friend-challenge circles — they're plumbing, not user-facing circles
+  const visibleMemberships = memberships.filter((m: any) => !isPrivateCircleName(m.circleName));
+
   return NextResponse.json({
     user: {
       ...user,
       chips,
       stats,
-      memberships: memberships.map((m: any) => ({
+      memberships: visibleMemberships.map((m: any) => ({
         ...m,
         circle: { id: m.circleId, name: m.circleName, emoji: m.emoji },
       })),

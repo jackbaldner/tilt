@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, useApiClient } from "@/app/providers";
 import { validateOptionsArray } from "@/lib/betValidation";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 interface Friend {
   id: string;
@@ -158,7 +159,9 @@ export default function NewBetPage() {
     });
   }
 
-  const is1v1 = selectedFriend !== null;
+  const is1v1 =
+    selectedFriend !== null ||
+    (prefilledCircle !== null && isPrivateCircleName(prefilledCircle.name));
   const optionsConstraintError =
     is1v1 && options.length !== 2
       ? `1:1 challenges are binary. Remove extras or click "Anyone" to add more options.`
@@ -207,7 +210,7 @@ export default function NewBetPage() {
           challengedUserId: selectedFriend?.id ?? undefined,
           title: title.trim(),
           description: description.trim() || undefined,
-          type: "binary",
+          type: options.length === 2 ? "binary" : "multiple_choice",
           stake: finalStake,
           options: validation.normalized,
           proposerOption,

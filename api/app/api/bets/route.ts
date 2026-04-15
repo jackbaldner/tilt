@@ -42,13 +42,16 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    bets: bets.map((b: any) => ({
-      ...b,
-      options: JSON.parse(b.options),
-      proposer: { id: b.proposerId, name: b.proposerName, image: b.proposerImage },
-      circle: b.circleId ? { id: b.circleId, name: b.circleName, emoji: b.circleEmoji } : null,
-      sides: (sidesByBet[b.id] ?? []).map((s: any) => ({ ...s, userName: s.userName })),
-    })),
+    bets: bets.map((b: any) => {
+      const isPrivate = b.circleName && isPrivateCircleName(b.circleName);
+      return {
+        ...b,
+        options: JSON.parse(b.options),
+        proposer: { id: b.proposerId, name: b.proposerName, image: b.proposerImage },
+        circle: isPrivate ? null : (b.circleId ? { id: b.circleId, name: b.circleName, emoji: b.circleEmoji } : null),
+        sides: (sidesByBet[b.id] ?? []).map((s: any) => ({ ...s, userName: s.userName })),
+      };
+    }),
   });
 }
 
