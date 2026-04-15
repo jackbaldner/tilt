@@ -50,6 +50,7 @@ export default function NewBetPage() {
   const [stake, setStake] = useState(50);
   const [customStake, setCustomStake] = useState("");
   const [resolveAt, setResolveAt] = useState("");
+  const [proposerOption, setProposerOption] = useState<"Yes" | "No" | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([]);
@@ -108,6 +109,10 @@ export default function NewBetPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
+    if (!proposerOption) {
+      setError("Pick your side (Yes or No)");
+      return;
+    }
 
     const finalStake = customStake ? parseInt(customStake) : stake;
     if (!finalStake || finalStake < 1) {
@@ -132,6 +137,7 @@ export default function NewBetPage() {
           type: "binary",
           stake: finalStake,
           options: ["Yes", "No"],
+          proposerOption,
           resolveAt: resolveAt || undefined,
           aiResolvable: false,
         }),
@@ -281,6 +287,27 @@ export default function NewBetPage() {
           />
         </div>
 
+        {/* Your side */}
+        <div>
+          <label className="block text-sm font-medium text-muted mb-2">Your side</label>
+          <div className="flex gap-2">
+            {(["Yes", "No"] as const).map((side) => (
+              <button
+                key={side}
+                type="button"
+                onClick={() => setProposerOption(side)}
+                className={`flex-1 py-3 rounded-xl border text-sm font-semibold transition-colors ${
+                  proposerOption === side
+                    ? "bg-accent border-accent text-white"
+                    : "bg-white border-border text-muted hover:border-border-2"
+                }`}
+              >
+                {side}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Resolve date (optional) */}
         <div>
           <label className="block text-sm font-medium text-muted mb-2">
@@ -325,7 +352,7 @@ export default function NewBetPage() {
 
         <button
           type="submit"
-          disabled={submitting || !title.trim() || finalStake < 1}
+          disabled={submitting || !title.trim() || finalStake < 1 || !proposerOption}
           className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-base shadow-sm"
         >
           {submitting
