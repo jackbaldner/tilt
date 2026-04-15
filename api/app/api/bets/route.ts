@@ -4,6 +4,8 @@ import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
 import { sendBetChallengeEmail } from "@/lib/email";
 import { joinBetInTx, InsufficientFundsError } from "@/lib/wallet";
+import { validateOptionsArray } from "@/lib/betValidation";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 // GET /api/bets — list bets for the current user (all bets they have a side in)
 export async function GET(req: NextRequest) {
@@ -72,13 +74,17 @@ export async function POST(req: NextRequest) {
   // --- Input validation ---
   if (!title?.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 });
   if (!type) return NextResponse.json({ error: "Type is required" }, { status: 400 });
-  if (!Array.isArray(options) || options.length < 2) {
-    return NextResponse.json({ error: "At least two options are required" }, { status: 400 });
+  // Validate options array (trim, dedup, length bounds, max label size)
+  const optionsResult = validateOptionsArray(options);
+  if (!optionsResult.ok) {
+    return NextResponse.json({ error: optionsResult.error }, { status: 400 });
   }
+  const normalizedOptions = optionsResult.normalized;
+
   if (!proposerOption) {
     return NextResponse.json({ error: "proposerOption is required" }, { status: 400 });
   }
-  if (!options.includes(proposerOption)) {
+  if (!normalizedOptions.includes(proposerOption)) {
     return NextResponse.json({ error: "proposerOption must be one of the options" }, { status: 400 });
   }
 
@@ -91,6 +97,24 @@ export async function POST(req: NextRequest) {
   if (circleId) {
     const membership = await one<any>("SELECT * FROM CircleMember WHERE circleId = ? AND userId = ?", [circleId, auth.id]);
     if (!membership) return NextResponse.json({ error: "Not a circle member" }, { status: 403 });
+  }
+
+  // If this bet is going into a private (1:1) friend-challenge circle,
+  // the options must be exactly 2 (the two sides of the challenge).
+  if (circleId) {
+    const circle = await one<{ name: string }>(
+      "SELECT name FROM Circle WHERE id = ?",
+      [circleId]
+    );
+    if (circle && isPrivateCircleName(circle.name)) {
+      const privateResult = validateOptionsArray(normalizedOptions, { requireExactly: 2 });
+      if (!privateResult.ok) {
+        return NextResponse.json(
+          { error: "1:1 challenges must have exactly 2 options" },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   const betId = cuid();
@@ -115,7 +139,7 @@ export async function POST(req: NextRequest) {
           description?.trim() ?? null,
           type,
           stake,
-          JSON.stringify(options),
+          JSON.stringify(normalizedOptions),
           resolveAt ? new Date(resolveAt).toISOString() : null,
           aiResolvable ? 1 : 0,
           stake, // totalPot starts at the proposer's stake since they're joining in the same tx
