@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, useApiClient } from "@/app/providers";
+import { validateOptionsArray } from "@/lib/betValidation";
 
 interface Friend {
   id: string;
@@ -58,7 +59,8 @@ export default function NewBetPage() {
   const [stake, setStake] = useState(50);
   const [customStake, setCustomStake] = useState("");
   const [resolveAt, setResolveAt] = useState("");
-  const [proposerOption, setProposerOption] = useState<"Yes" | "No" | null>(null);
+  const [options, setOptions] = useState<string[]>(["Yes", "No"]);
+  const [proposerOption, setProposerOption] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([]);
@@ -133,13 +135,38 @@ export default function NewBetPage() {
     }
   }
 
+  function updateOption(index: number, value: string) {
+    setOptions((prev) => {
+      const next = [...prev];
+      const old = next[index];
+      next[index] = value;
+      if (proposerOption === old) setProposerOption(value);
+      return next;
+    });
+  }
+
+  function addOption() {
+    setOptions((prev) => (prev.length >= 20 ? prev : [...prev, ""]));
+  }
+
+  function removeOption(index: number) {
+    setOptions((prev) => {
+      if (prev.length <= 2) return prev;
+      const removed = prev[index];
+      if (proposerOption === removed) setProposerOption(null);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  const is1v1 = selectedFriend !== null;
+  const optionsConstraintError =
+    is1v1 && options.length !== 2
+      ? `1:1 challenges are binary. Remove extras or click "Anyone" to add more options.`
+      : null;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    if (!proposerOption) {
-      setError("Pick your side (Yes or No)");
-      return;
-    }
 
     const finalStake = customStake ? parseInt(customStake) : stake;
     if (!finalStake || finalStake < 1) {
@@ -148,6 +175,24 @@ export default function NewBetPage() {
     }
     if (user && finalStake > user.chips) {
       setError(`Not enough chips. You have ${user.chips}.`);
+      return;
+    }
+
+    const validation = validateOptionsArray(options);
+    if (!validation.ok) {
+      setError(validation.error);
+      return;
+    }
+    if (optionsConstraintError) {
+      setError(optionsConstraintError);
+      return;
+    }
+    if (!proposerOption) {
+      setError("Pick your side");
+      return;
+    }
+    if (!validation.normalized.includes(proposerOption)) {
+      setError("Your side must be one of the options");
       return;
     }
 
@@ -164,7 +209,7 @@ export default function NewBetPage() {
           description: description.trim() || undefined,
           type: "binary",
           stake: finalStake,
-          options: ["Yes", "No"],
+          options: validation.normalized,
           proposerOption,
           resolveAt: resolveAt || undefined,
           aiResolvable: false,
@@ -326,24 +371,72 @@ export default function NewBetPage() {
           />
         </div>
 
-        {/* Your side */}
+        {/* Options editor */}
+        <div>
+          <label className="block text-sm font-medium text-muted mb-2">Options</label>
+          <div className="space-y-2">
+            {options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={opt}
+                  onChange={(e) => updateOption(i, e.target.value)}
+                  maxLength={50}
+                  placeholder={`Option ${i + 1}`}
+                  className="flex-1 bg-white border border-border rounded-xl px-3 py-2 text-text text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
+                />
+                {options.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => removeOption(i)}
+                    className="w-9 h-9 rounded-xl bg-surface border border-border text-muted hover:text-loss hover:border-loss/40 transition-colors flex items-center justify-center"
+                    aria-label="Remove option"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {!is1v1 && options.length < 20 && (
+            <button
+              type="button"
+              onClick={addOption}
+              className="mt-2 text-sm text-accent hover:text-accent-2 font-medium"
+            >
+              + Add option
+            </button>
+          )}
+          {optionsConstraintError && (
+            <p className="mt-2 text-xs text-loss">{optionsConstraintError}</p>
+          )}
+        </div>
+
+        {/* Your side — derives from options */}
         <div>
           <label className="block text-sm font-medium text-muted mb-2">Your side</label>
-          <div className="flex gap-2">
-            {(["Yes", "No"] as const).map((side) => (
-              <button
-                key={side}
-                type="button"
-                onClick={() => setProposerOption(side)}
-                className={`flex-1 py-3 rounded-xl border text-sm font-semibold transition-colors ${
-                  proposerOption === side
-                    ? "bg-accent border-accent text-white"
-                    : "bg-white border-border text-muted hover:border-border-2"
-                }`}
-              >
-                {side}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {options.map((opt, i) => {
+              const selected = proposerOption === opt && opt.trim().length > 0;
+              const disabled = !opt.trim();
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setProposerOption(opt)}
+                  className={`py-2 px-4 rounded-xl border text-sm font-semibold transition-colors ${
+                    disabled
+                      ? "bg-surface border-border text-subtle cursor-not-allowed"
+                      : selected
+                      ? "bg-accent border-accent text-white"
+                      : "bg-white border-border text-muted hover:border-border-2"
+                  }`}
+                >
+                  {opt.trim() || `Option ${i + 1}`}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -391,7 +484,14 @@ export default function NewBetPage() {
 
         <button
           type="submit"
-          disabled={submitting || !title.trim() || finalStake < 1 || !proposerOption}
+          disabled={
+            submitting ||
+            !title.trim() ||
+            finalStake < 1 ||
+            !proposerOption ||
+            !options.includes(proposerOption) ||
+            optionsConstraintError !== null
+          }
           className="w-full bg-accent hover:bg-accent-2 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-base shadow-sm"
         >
           {submitting
