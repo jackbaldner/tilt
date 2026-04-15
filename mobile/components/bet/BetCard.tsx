@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { Colors, resolutionColors, betTypeColors } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { formatDistanceToNow } from "date-fns";
+import { isBetUneven, type SideCounts } from "@/lib/betMath";
 
 interface BetCardProps {
   bet: {
@@ -15,6 +16,7 @@ interface BetCardProps {
     resolvedOption?: string;
     createdAt: string;
     resolveAt?: string;
+    options?: string[];
     proposer?: { id: string; name?: string };
     sides?: Array<{ userId: string; option: string; user?: { name?: string } }>;
     _count?: { comments: number };
@@ -32,6 +34,15 @@ export function BetCard({ bet, currentUserId, onPress }: BetCardProps) {
   const isResolved = bet.resolution === "resolved";
   const isWin = isResolved && myEntry && myEntry.option === bet.resolvedOption;
   const isLoss = isResolved && myEntry && myEntry.option !== bet.resolvedOption;
+
+  const sideCountsMap: SideCounts = {};
+  for (const s of bet.sides ?? []) {
+    sideCountsMap[s.option] = (sideCountsMap[s.option] ?? 0) + 1;
+  }
+  const needsTakers =
+    bet.resolution === "pending" &&
+    !myEntry &&
+    isBetUneven(sideCountsMap, bet.options ?? []);
 
   return (
     <TouchableOpacity
@@ -79,6 +90,24 @@ export function BetCard({ bet, currentUserId, onPress }: BetCardProps) {
             {bet.type.replace(/_/g, " ")}
           </Text>
         </View>
+        {needsTakers && (
+          <View
+            style={{
+              backgroundColor: `${Colors.accent}20`,
+              borderRadius: 8,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <Text style={{ fontSize: 11 }}>🎯</Text>
+            <Text style={{ color: Colors.accent, fontSize: 11, fontWeight: "700", textTransform: "uppercase" }}>
+              Needs takers
+            </Text>
+          </View>
+        )}
         {myEntry && (
           <View
             style={{
