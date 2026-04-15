@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth, useApiClient } from "@/app/providers";
+import { isBetUneven, type SideCounts } from "@/lib/betMath";
 
 interface Bet {
   id: string;
@@ -52,6 +53,13 @@ function BetCard({ bet, userId }: { bet: Bet; userId: string }) {
   const mySide = bet.sides.find((s) => s.userId === userId);
   const otherSides = bet.sides.filter((s) => s.userId !== userId);
 
+  const sideCounts: SideCounts = {};
+  for (const s of bet.sides) sideCounts[s.option] = (sideCounts[s.option] ?? 0) + 1;
+  const needsTakers =
+    bet.resolution === "pending" &&
+    !mySide &&
+    isBetUneven(sideCounts, bet.options ?? []);
+
   return (
     <Link href={`/bet/${bet.id}`} className="block">
       <div className="bg-white border border-border rounded-2xl p-4 hover:border-border-2 hover:shadow-sm transition-all active:scale-[0.98]">
@@ -64,7 +72,14 @@ function BetCard({ bet, userId }: { bet: Bet; userId: string }) {
               </p>
             )}
           </div>
-          <BetStatusBadge bet={bet} userId={userId} />
+          <div className="flex flex-col gap-1 items-end flex-shrink-0">
+            <BetStatusBadge bet={bet} userId={userId} />
+            {needsTakers && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium whitespace-nowrap">
+                🎯 Needs takers
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between">

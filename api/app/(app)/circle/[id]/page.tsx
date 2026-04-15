@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import { isBetUneven, type SideCounts } from "@/lib/betMath";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, useApiClient } from "@/app/providers";
@@ -284,24 +285,38 @@ function BetRow({ bet, userId }: { bet: Bet; userId: string }) {
   const isResolved = bet.resolution === "resolved";
   const isWaiting = !isResolved && bet.sides.length < 2;
 
+  const sideCounts: SideCounts = {};
+  for (const s of bet.sides) sideCounts[s.option] = (sideCounts[s.option] ?? 0) + 1;
+  const needsTakers =
+    bet.resolution === "pending" &&
+    !mySide &&
+    isBetUneven(sideCounts, bet.options ?? []);
+
   return (
     <Link href={`/bet/${bet.id}`} className="block">
       <div className="bg-white border border-border rounded-2xl p-4 hover:border-border-2 hover:shadow-sm transition-all">
         <div className="flex items-start justify-between gap-2 mb-2">
           <p className="text-text text-sm font-semibold leading-snug line-clamp-2 flex-1">{bet.title}</p>
-          {isResolved ? (
-            mySide ? (
-              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium border ${mySide.status === "won" ? "bg-win/10 text-win border-win/20" : "bg-loss/10 text-loss border-loss/20"}`}>
-                {mySide.status === "won" ? "Won" : "Lost"}
-              </span>
+          <div className="flex flex-col gap-1 items-end flex-shrink-0">
+            {isResolved ? (
+              mySide ? (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${mySide.status === "won" ? "bg-win/10 text-win border-win/20" : "bg-loss/10 text-loss border-loss/20"}`}>
+                  {mySide.status === "won" ? "Won" : "Lost"}
+                </span>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-border">Done</span>
+              )
+            ) : isWaiting ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-pending/10 text-pending border border-pending/20">Open</span>
             ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-border flex-shrink-0">Done</span>
-            )
-          ) : isWaiting ? (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-pending/10 text-pending border border-pending/20 flex-shrink-0">Open</span>
-          ) : (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 flex-shrink-0">Live</span>
-          )}
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">Live</span>
+            )}
+            {needsTakers && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium whitespace-nowrap">
+                🎯 Needs takers
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between text-xs text-subtle">
