@@ -2,26 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { ensureFriendshipTable } from "@/lib/ensure-tables";
+import { verify } from "jsonwebtoken";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await ensureFriendshipTable();
-  const auth = await requireAuth(req);
-  if (isAuthError(auth)) return auth;
+
+  // Try to authenticate, but don't fail if unauthenticated — this endpoint
+  // is readable by anyone (for shareable bet links).
+  const authHeader = req.headers.get("authorization");
+  let currentUserId: string | null = null;
+  if (authHeader?.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.slice(7);
+      const payload = verify(
+        token,
+        process.env.NEXTAUTH_SECRET ?? "tilt-super-secret-key-change-in-prod-32chars"
+      ) as { sub: string };
+      currentUserId = payload.sub;
+    } catch {
+      currentUserId = null;
+    }
+  }
+
   const { id } = await params;
 
   const bet = await one<any>("SELECT * FROM Bet WHERE id = ?", [id]);
   if (!bet) return NextResponse.json({ error: "Bet not found" }, { status: 404 });
-
-  // Allow access if user is proposer, has a BetSide, or is a circle member
-  const isProposer = bet.proposerId === auth.id;
-  const hasSide = !!(await one<any>("SELECT id FROM BetSide WHERE betId = ? AND userId = ?", [id, auth.id]));
-  const isCircleMember = bet.circleId
-    ? !!(await one<any>("SELECT id FROM CircleMember WHERE circleId = ? AND userId = ?", [bet.circleId, auth.id]))
-    : false;
-
-  if (!isProposer && !hasSide && !isCircleMember) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
 
   const sides = await all<any>(
     "SELECT bs.*, u.id as userId, u.name as userName, u.username as userUsername, u.image as userImage FROM BetSide bs JOIN User u ON u.id = bs.userId WHERE bs.betId = ?",

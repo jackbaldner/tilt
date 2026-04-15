@@ -111,12 +111,20 @@ function PersonIcon({ active }: { active: boolean }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Some routes are viewable by unauthenticated users (shareable bet
+  // links). For these, we skip the redirect and let the page render
+  // with the "sign in to take this bet" CTA. /bet/new is NOT public —
+  // only the detail pages are.
+  const isPublicRoute =
+    pathname.startsWith("/bet/") && pathname !== "/bet/new";
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !isPublicRoute) {
       router.replace("/");
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isPublicRoute]);
 
   if (loading) {
     return (
@@ -126,12 +134,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) return null;
+  // Auth-gated routes: unauth users see nothing (redirect is firing).
+  if (!user && !isPublicRoute) return null;
 
   return (
     <div className="min-h-screen bg-bg pb-24">
       {children}
-      <BottomNav />
+      {user && <BottomNav />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "./providers";
 import { TiltLogo } from "@/components/TiltLogo";
@@ -9,8 +9,24 @@ import { TiltLogo } from "@/components/TiltLogo";
 type Tab = "login" | "signup";
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-bg flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const { login, user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextUrl = searchParams.get("next") ?? "/dashboard";
   const [tab, setTab] = useState<Tab>("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -27,9 +43,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/dashboard");
+      router.replace(nextUrl);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, nextUrl]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +64,7 @@ export default function LoginPage() {
         return;
       }
       login(data.user, data.token);
-      router.push("/dashboard");
+      router.push(nextUrl);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -88,7 +104,7 @@ export default function LoginPage() {
         return;
       }
       login(data.user, data.token);
-      router.push("/dashboard");
+      router.push(nextUrl);
     } catch {
       setError("Network error. Please try again.");
     } finally {

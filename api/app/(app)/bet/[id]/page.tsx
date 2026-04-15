@@ -220,6 +220,10 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
     );
   }
 
+  const isAuthenticated = !!user;
+  const betUrl = `/bet/${betId}`;
+  const signInHref = `/?next=${encodeURIComponent(betUrl)}`;
+
   const mySide = bet.sides.find((s) => s.userId === user?.id);
   const iAmProposer = bet.proposer?.id === user?.id;
   const isLive = bet.resolution === "pending";
@@ -380,7 +384,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                   </div>
                 )}
 
-                {isLive && !mySide && waiting && (
+                {isLive && !mySide && waiting && isAuthenticated && (
                   <button
                     onClick={() => isClickable && joinBet(opt)}
                     disabled={joining !== null || !isClickable}
@@ -398,10 +402,28 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
           })}
         </div>
 
-        {waiting && isLive && !mySide && (
+        {waiting && isLive && !mySide && isAuthenticated && (
           <p className="text-xs text-subtle text-center mt-3">
             Pick a side to lock it in.
           </p>
+        )}
+
+        {!isAuthenticated && (
+          <div className="mt-4 bg-white border-2 border-accent rounded-2xl p-5 text-center">
+            <p className="text-lg font-semibold text-text mb-2">
+              Take this bet with {bet.proposer.name}
+            </p>
+            <p className="text-sm text-muted mb-4">
+              {bet.stake} chips on the line. Sign in or create an account to join.
+            </p>
+            <a
+              href={signInHref}
+              className="inline-block bg-accent hover:bg-accent-2 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+            >
+              Sign in to take it
+            </a>
+            <p className="text-xs text-subtle mt-3">New to Tilt? You&apos;ll get 1,000 free chips.</p>
+          </div>
         )}
         {waiting && isLive && mySide && (
           <div className="mt-3 p-3 rounded-xl bg-pending/5 border border-pending/20 text-center">
@@ -534,25 +556,34 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <input
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && postComment()}
-            placeholder="Add a comment…"
-            className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-sm text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
-          />
-          <button
-            onClick={postComment}
-            disabled={!comment.trim() || postingComment}
-            className="px-3 py-2 rounded-xl bg-accent disabled:opacity-40 text-white text-sm hover:bg-accent-2 transition-colors"
+        {isAuthenticated ? (
+          <div className="flex gap-2">
+            <input
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && postComment()}
+              placeholder="Add a comment…"
+              className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-sm text-text placeholder-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
+            />
+            <button
+              onClick={postComment}
+              disabled={!comment.trim() || postingComment}
+              className="px-3 py-2 rounded-xl bg-accent disabled:opacity-40 text-white text-sm hover:bg-accent-2 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <a
+            href={signInHref}
+            className="block w-full text-center text-sm text-accent hover:underline py-1"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-          </button>
-        </div>
+            Sign in to join the trash talk
+          </a>
+        )}
       </div>
     </div>
   );
