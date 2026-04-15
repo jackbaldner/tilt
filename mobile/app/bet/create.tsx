@@ -21,6 +21,7 @@ import { ENDPOINTS } from "@/constants/api";
 import { useAuthStore } from "@/stores/authStore";
 import { Colors, betTypeColors } from "@/constants/colors";
 import Toast from "react-native-toast-message";
+import { validateOptionsArray } from "@/lib/betValidation";
 
 type BetType = "yes_no" | "over_under" | "multiple_choice" | "custom";
 
@@ -79,6 +80,18 @@ export default function CreateBetScreen() {
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!selectedFriend) throw new Error("Select a friend first");
+      // Validate options match server-side rules (trim, dedup, length, max label)
+      const validation = validateOptionsArray(options);
+      if (!validation.ok) {
+        throw new Error(validation.error);
+      }
+      // 1:1 binary constraint
+      if (selectedFriend !== null) {
+        const privateValidation = validateOptionsArray(options, { requireExactly: 2 });
+        if (!privateValidation.ok) {
+          throw new Error("1:1 challenges must have exactly 2 options");
+        }
+      }
       // Get or create the private 1:1 circle
       const { circleId } = await api.post<{ circleId: string }>(
         ENDPOINTS.friendChallenge(selectedFriend.friendshipId)
@@ -154,7 +167,10 @@ export default function CreateBetScreen() {
     proposerOption !== null &&
     options.includes(proposerOption) &&
     stake > 0 &&
-    (user?.chips ?? 0) >= stake;
+    (user?.chips ?? 0) >= stake &&
+    // 1:1 challenges are binary — if a specific friend is selected,
+    // exactly 2 options are required.
+    (selectedFriend === null || options.length === 2);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -559,6 +575,13 @@ export default function CreateBetScreen() {
           <Text style={{ color: Colors.text.muted, fontSize: 13, marginBottom: 20 }}>
             You have {user?.chips?.toLocaleString() ?? 0} chips
           </Text>
+
+          {/* 1:1 binary warning */}
+          {selectedFriend !== null && options.length !== 2 && (
+            <Text style={{ color: Colors.loss, fontSize: 12, marginBottom: 12 }}>
+              1:1 challenges are binary. Remove extras to continue.
+            </Text>
+          )}
 
           {/* AI Resolvable */}
           <TouchableOpacity
