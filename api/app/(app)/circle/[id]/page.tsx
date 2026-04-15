@@ -91,6 +91,13 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
   const [inviteUrl, setInviteUrl] = useState("");
   const [shareMsg, setShareMsg] = useState("");
 
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editEmoji, setEditEmoji] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
+
   const load = useCallback(async () => {
     const [circleRes, betsRes] = await Promise.all([
       authFetch(`/api/circles/${circleId}`),
@@ -132,6 +139,46 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
     });
   }
 
+  function startEditing() {
+    if (!circle) return;
+    setEditName(circle.name);
+    setEditDescription(circle.description ?? "");
+    setEditEmoji(circle.emoji);
+    setEditError("");
+    setEditing(true);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editName.trim()) {
+      setEditError("Name is required");
+      return;
+    }
+    setSavingEdit(true);
+    setEditError("");
+    try {
+      const res = await authFetch(`/api/circles/${circleId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editName.trim(),
+          description: editDescription.trim() || null,
+          emoji: editEmoji.trim() || "🎯",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEditError(data.error ?? "Failed to save");
+        return;
+      }
+      await load();
+      setEditing(false);
+    } catch {
+      setEditError("Network error");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-lg mx-auto px-4 pt-8">
@@ -169,35 +216,89 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
 
       {/* Circle header */}
       <div className="bg-white border border-border rounded-2xl p-5 mb-4 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-3xl mb-2">{circle.emoji}</div>
-            <h1 className="text-xl font-bold text-text">{circle.name}</h1>
-            {circle.description && (
-              <p className="text-muted text-sm mt-1">{circle.description}</p>
-            )}
-            <div className="flex items-center gap-3 mt-2 text-xs text-subtle">
-              <span>{circle._count.members} members</span>
-              <span>·</span>
-              <span>{circle._count.bets} bets</span>
+        {editing ? (
+          <form onSubmit={saveEdit}>
+            <p className="text-sm font-medium text-text mb-3">Edit circle</p>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={editEmoji}
+                onChange={(e) => setEditEmoji(e.target.value)}
+                className="w-14 bg-surface border border-border rounded-xl px-2 py-2 text-center text-xl focus:outline-none focus:border-accent"
+                maxLength={2}
+                placeholder="🎯"
+              />
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Circle name"
+                autoFocus
+                className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-text text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10"
+              />
+            </div>
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Description (optional)"
+              rows={2}
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-text text-sm focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 resize-none mb-3"
+            />
+            {editError && <p className="text-loss text-xs mb-2">{editError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="flex-1 text-sm text-muted py-2 rounded-xl border border-border hover:bg-surface transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit || !editName.trim()}
+                className="flex-1 text-sm font-semibold text-white bg-accent py-2 rounded-xl disabled:opacity-40 hover:bg-accent-2 transition-colors"
+              >
+                {savingEdit ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-3xl mb-2">{circle.emoji}</div>
+              <h1 className="text-xl font-bold text-text">{circle.name}</h1>
+              {circle.description && (
+                <p className="text-muted text-sm mt-1">{circle.description}</p>
+              )}
+              <div className="flex items-center gap-3 mt-2 text-xs text-subtle">
+                <span>{circle._count.members} members</span>
+                <span>·</span>
+                <span>{circle._count.bets} bets</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/bet/new?circleId=${circleId}`}
+                className="text-sm font-semibold text-white bg-accent hover:bg-accent-2 px-3 py-2 rounded-xl transition-colors text-center whitespace-nowrap shadow-sm"
+              >
+                + Bet
+              </Link>
+              <button
+                onClick={getInviteLink}
+                className="flex items-center gap-1.5 text-sm text-muted bg-surface border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"
+              >
+                <ShareIcon />
+                {shareMsg || "Invite"}
+              </button>
+              {user && circle.ownerId === user.id && (
+                <button
+                  onClick={startEditing}
+                  className="text-sm text-muted bg-surface border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"
+                >
+                  Edit
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <Link
-              href={`/bet/new?circleId=${circleId}`}
-              className="text-sm font-semibold text-white bg-accent hover:bg-accent-2 px-3 py-2 rounded-xl transition-colors text-center whitespace-nowrap shadow-sm"
-            >
-              + Bet
-            </Link>
-            <button
-              onClick={getInviteLink}
-              className="flex items-center gap-1.5 text-sm text-muted bg-surface border border-border hover:border-border-2 px-3 py-2 rounded-xl transition-colors"
-            >
-              <ShareIcon />
-              {shareMsg || "Invite"}
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Tabs */}

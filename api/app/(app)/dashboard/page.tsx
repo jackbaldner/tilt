@@ -255,18 +255,24 @@ export default function DashboardPage() {
           </form>
         )}
 
-        {circles.length === 0 && !loading ? (
-          <div className="bg-surface border border-dashed border-border-2 rounded-2xl p-6 text-center">
-            <p className="text-muted text-sm">No circles yet.</p>
-            <p className="text-subtle text-xs mt-1">Create one to start betting with friends.</p>
-          </div>
-        ) : (
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
-            {circles.map((c) => (
-              <CircleCard key={c.id} circle={c} />
-            ))}
-          </div>
-        )}
+        {(() => {
+          const visibleCircles = circles.filter((c) => !c.name.startsWith("__private__"));
+          if (visibleCircles.length === 0 && !loading) {
+            return (
+              <div className="bg-surface border border-dashed border-border-2 rounded-2xl p-6 text-center">
+                <p className="text-muted text-sm">No circles yet.</p>
+                <p className="text-subtle text-xs mt-1">Create one to start betting with friends.</p>
+              </div>
+            );
+          }
+          return (
+            <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
+              {visibleCircles.map((c) => (
+                <CircleCard key={c.id} circle={c} />
+              ))}
+            </div>
+          );
+        })()}
       </section>
 
       {/* Active Bets */}
