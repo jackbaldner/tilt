@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, cuid, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { getBalance } from "@/lib/wallet";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -19,7 +20,15 @@ export async function GET(req: NextRequest) {
     [auth.id]
   );
 
-  const enriched = await Promise.all(circles.map(async (c: any) => {
+  // Private circles (1:1 friend-challenge containers) are plumbing, not
+  // user-facing circles. Exclude them from the list entirely — the friend
+  // challenge UI surfaces these as "Challenge from X" cards elsewhere,
+  // not as circles in the "Your circles" list.
+  const visibleCircles = circles.filter(
+    (c: any) => !isPrivateCircleName(c.name)
+  );
+
+  const enriched = await Promise.all(visibleCircles.map(async (c: any) => {
     const members = await all<any>(
       `SELECT cm.*, u.id as userId, u.name as userName, u.image as userImage
        FROM CircleMember cm JOIN User u ON u.id = cm.userId

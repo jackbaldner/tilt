@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { one, all, run, now } from "@/lib/db";
 import { requireAuth, isAuthError } from "@/lib/mobile-auth";
 import { getBalance } from "@/lib/wallet";
+import { resolveCircleDisplay } from "@/lib/circleDisplay";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(req);
@@ -24,9 +25,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const betCount = betCountRow?.count ?? 0;
   const owner = await one<any>("SELECT id, name, image FROM User WHERE id = ?", [circle.ownerId]);
 
+  // Resolve friendly display name — replaces raw __private__... with
+  // the pretty "Jack vs Lexi" form pulled from description or member names.
+  const display = resolveCircleDisplay(
+    {
+      name: circle.name,
+      description: circle.description,
+      members: members.map((m: any) => ({
+        userId: m.userId,
+        user: { name: m.userName },
+      })),
+    },
+    auth.id
+  );
+
   return NextResponse.json({
     circle: {
       ...circle,
+      name: display.name,        // friendly name — raw __private__ string never surfaces here
+      isPrivate: display.isPrivate,
+      _rawName: circle.name,     // preserved for internal debugging/navigation
       owner,
       members: members.map((m: any, i: number) => ({
         ...m,
