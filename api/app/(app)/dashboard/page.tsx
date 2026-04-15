@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth, useApiClient } from "@/app/providers";
 import { isBetUneven, type SideCounts } from "@/lib/betMath";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 interface Bet {
   id: string;
@@ -66,7 +67,7 @@ function BetCard({ bet, userId }: { bet: Bet; userId: string }) {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-text text-sm leading-tight line-clamp-2">{bet.title}</p>
-            {bet.circle && (
+            {bet.circle && !isPrivateCircleName(bet.circle.name) && (
               <p className="text-xs text-subtle mt-1">
                 {bet.circle.emoji} {bet.circle.name}
               </p>
