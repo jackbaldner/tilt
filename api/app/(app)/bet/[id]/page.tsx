@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useApiClient } from "@/app/providers";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 interface BetUser {
   id: string;
@@ -207,6 +208,13 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
     sidesByOption[s.option].push(s);
   }
 
+  const is1v1 = isPrivateCircleName(bet.circle?.name);
+  // For 1:1 mode: first taker per option (at most one in a private circle)
+  const firstTakerByOption: Record<string, BetSide | undefined> = {};
+  for (const opt of bet.options) {
+    firstTakerByOption[opt] = (sidesByOption[opt] ?? [])[0];
+  }
+
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 pb-8">
       {/* Back */}
@@ -224,7 +232,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
       <div className="bg-white border border-border rounded-2xl p-5 mb-4 shadow-sm">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1">
-            {bet.circle && (
+            {bet.circle && !is1v1 && (
               <a href={`/circle/${bet.circle.id}`} className="text-xs text-subtle hover:text-muted mb-1 block">
                 {bet.circle.emoji} {bet.circle.name}
               </a>
@@ -281,6 +289,14 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
             const isWinner = isResolved && bet.resolvedOption === opt;
             const isLoser = isResolved && bet.resolvedOption !== opt && hasAny;
 
+            // 1:1 mode computed values
+            const takenBySide = firstTakerByOption[opt];
+            const takenByOther = is1v1 && takenBySide && takenBySide.userId !== user?.id;
+            const lockedInPrivate = is1v1 && takenByOther && !mySide;
+            const isMyAvailableSideInPrivate = is1v1 && !takenBySide && !mySide;
+            const isClickable =
+              isLive && !mySide && waiting && !lockedInPrivate;
+
             return (
               <div
                 key={opt}
@@ -291,6 +307,10 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                     ? "border-loss/20 bg-loss/5 opacity-60"
                     : isMySide
                     ? "border-accent/40 bg-accent/5"
+                    : lockedInPrivate
+                    ? "border-border bg-surface opacity-60"
+                    : isMyAvailableSideInPrivate
+                    ? "border-accent bg-accent/5"
                     : "border-border bg-surface"
                 }`}
               >
@@ -303,14 +323,26 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                         </svg>
                       </span>
                     )}
-                    <span className={`font-semibold text-sm ${isWinner ? "text-win" : isMySide ? "text-accent" : "text-text"}`}>
+                    <span className={`font-semibold text-sm ${isWinner ? "text-win" : isMySide ? "text-accent" : isMyAvailableSideInPrivate ? "text-accent" : "text-text"}`}>
                       {opt}
                     </span>
                     {isMySide && <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">You</span>}
+                    {lockedInPrivate && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted border border-border">
+                        Taken · {takenBySide?.user?.name ?? "Someone"}
+                      </span>
+                    )}
+                    {isMyAvailableSideInPrivate && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
+                        Your side →
+                      </span>
+                    )}
                   </div>
-                  <span className="text-xs text-subtle">{optSides.length} {optSides.length === 1 ? "person" : "people"}</span>
+                  {!is1v1 && (
+                    <span className="text-xs text-subtle">{optSides.length} {optSides.length === 1 ? "person" : "people"}</span>
+                  )}
                 </div>
-                {optSides.length > 0 && (
+                {optSides.length > 0 && !is1v1 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {optSides.map((s) => (
                       <div key={s.id} className="flex items-center gap-1">
@@ -323,11 +355,15 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
 
                 {isLive && !mySide && waiting && (
                   <button
-                    onClick={() => joinBet(opt)}
-                    disabled={joining !== null}
-                    className="mt-3 w-full py-2 rounded-lg bg-accent hover:bg-accent-2 disabled:opacity-40 text-white text-sm font-semibold transition-colors"
+                    onClick={() => isClickable && joinBet(opt)}
+                    disabled={joining !== null || !isClickable}
+                    className={`mt-3 w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
+                      lockedInPrivate
+                        ? "bg-surface-2 text-muted border border-border cursor-not-allowed opacity-60"
+                        : "bg-accent hover:bg-accent-2 disabled:opacity-40 text-white"
+                    }`}
                   >
-                    {joining === opt ? "Joining…" : `Take ${opt} · ${bet.stake} chips`}
+                    {joining === opt ? "Joining…" : lockedInPrivate ? "Taken" : `Take ${opt} · ${bet.stake} chips`}
                   </button>
                 )}
               </div>
