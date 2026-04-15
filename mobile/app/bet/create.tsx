@@ -53,6 +53,7 @@ export default function CreateBetScreen() {
   const [description, setDescription] = useState("");
   const [betType, setBetType] = useState<BetType>("yes_no");
   const [options, setOptions] = useState<string[]>(["Yes", "No"]);
+  const [proposerOption, setProposerOption] = useState<string | null>(null);
   const [newOption, setNewOption] = useState("");
   const [stake, setStake] = useState(50);
   const [aiResolvable, setAiResolvable] = useState(false);
@@ -69,6 +70,7 @@ export default function CreateBetScreen() {
 
   const setBetTypeAndOptions = (type: BetType) => {
     setBetType(type);
+    setProposerOption(null); // reset side picker when bet type changes
     const defaults = BET_TYPE_CONFIG[type].defaultOptions;
     if (defaults.length > 0) setOptions(defaults);
     else if (type === "multiple_choice") setOptions([]);
@@ -88,6 +90,7 @@ export default function CreateBetScreen() {
         type: betType,
         stake,
         options,
+        proposerOption,
         aiResolvable,
       });
     },
@@ -148,6 +151,8 @@ export default function CreateBetScreen() {
     selectedFriend !== null &&
     title.trim().length > 0 &&
     options.length >= 2 &&
+    proposerOption !== null &&
+    options.includes(proposerOption) &&
     stake > 0 &&
     (user?.chips ?? 0) >= stake;
 
@@ -481,6 +486,44 @@ export default function CreateBetScreen() {
                 <Ionicons name="add" size={22} color="white" />
               </TouchableOpacity>
             </View>
+          )}
+
+          {/* Your side */}
+          {options.length >= 2 && (
+            <>
+              <Text style={{ color: Colors.text.secondary, fontWeight: "700", marginBottom: 10 }}>
+                Your side
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                {options.map((opt) => {
+                  const selected = proposerOption === opt;
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      onPress={() => setProposerOption(opt)}
+                      style={{
+                        backgroundColor: selected ? Colors.primary : Colors.surface,
+                        borderRadius: 10,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderWidth: 1.5,
+                        borderColor: selected ? Colors.primary : Colors.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: selected ? "white" : Colors.text.primary,
+                          fontWeight: "700",
+                          fontSize: 14,
+                        }}
+                      >
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
           )}
 
           {/* Stake */}
