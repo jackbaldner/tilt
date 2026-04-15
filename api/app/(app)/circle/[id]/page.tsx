@@ -118,6 +118,22 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
     load();
   }, [load]);
 
+  // Private (1:1 friend-challenge) circles are plumbing — users should
+  // never see the "circle" view. Redirect to the single bet inside, or
+  // to /friends if the circle has no bets.
+  useEffect(() => {
+    if (!circle) return;
+    const isPrivate =
+      (circle as any).isPrivate ?? (circle.name ?? "").startsWith("__private__");
+    if (!isPrivate) return;
+
+    if (bets.length === 1) {
+      router.replace(`/bet/${bets[0].id}`);
+    } else {
+      router.replace("/friends");
+    }
+  }, [circle, bets, router]);
+
   async function getInviteLink() {
     if (inviteUrl) {
       copy(inviteUrl);
@@ -193,6 +209,18 @@ export default function CirclePage({ params }: { params: Promise<{ id: string }>
       <div className="max-w-lg mx-auto px-4 pt-8 text-center">
         <p className="text-muted">Circle not found.</p>
         <Link href="/dashboard" className="text-accent text-sm mt-2 block hover:underline">← Back to dashboard</Link>
+      </div>
+    );
+  }
+
+  const isPrivate = circle
+    ? ((circle as any).isPrivate ?? (circle.name ?? "").startsWith("__private__"))
+    : false;
+
+  if (isPrivate) {
+    return (
+      <div className="max-w-lg mx-auto px-4 pt-8 text-center">
+        <p className="text-muted text-sm">Loading…</p>
       </div>
     );
   }
