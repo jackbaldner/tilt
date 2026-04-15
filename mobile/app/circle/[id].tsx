@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Share,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, router, Stack } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +21,7 @@ import { Colors, resolutionColors } from "@/constants/colors";
 import { BetCard } from "@/components/bet/BetCard";
 import Toast from "react-native-toast-message";
 import { formatDistanceToNow } from "date-fns";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 type TabType = "bets" | "leaderboard" | "activity";
 
@@ -58,6 +60,17 @@ export default function CircleDetailScreen() {
   const leaderboard = leaderboardData?.leaderboard ?? [];
   const activities = activityData?.activities ?? [];
 
+  useEffect(() => {
+    if (!circle) return;
+    const isPrivate = (circle as any).isPrivate ?? isPrivateCircleName(circle.name);
+    if (!isPrivate) return;
+    if (bets.length === 1) {
+      router.replace(`/bet/${bets[0].id}` as any);
+    } else {
+      router.replace("/friends" as any);
+    }
+  }, [circle, bets, router]);
+
   const shareInvite = async () => {
     try {
       const inviteData = await api.get<{ inviteCode: string; inviteUrl: string }>(
@@ -77,6 +90,14 @@ export default function CircleDetailScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
         <Text style={{ color: Colors.text.primary, padding: 20 }}>Circle not found</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (circle && ((circle as any).isPrivate ?? isPrivateCircleName(circle.name))) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={Colors.primary} />
       </SafeAreaView>
     );
   }

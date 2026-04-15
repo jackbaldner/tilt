@@ -3,6 +3,7 @@ import { Colors, resolutionColors, betTypeColors } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { formatDistanceToNow } from "date-fns";
 import { isBetUneven, type SideCounts } from "@/lib/betMath";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 interface BetCardProps {
   bet: {
@@ -20,6 +21,7 @@ interface BetCardProps {
     proposer?: { id: string; name?: string };
     sides?: Array<{ userId: string; option: string; user?: { name?: string } }>;
     _count?: { comments: number };
+    circle?: { id: string; name: string; emoji?: string } | null;
   };
   currentUserId?: string;
   onPress: () => void;
@@ -174,6 +176,24 @@ export function BetCard({ bet, currentUserId, onPress }: BetCardProps) {
           <Text style={{ fontSize: 14 }}>🏆</Text>
           <Text style={{ color: Colors.win, fontWeight: "700", fontSize: 13 }}>
             {bet.resolvedOption}
+          </Text>
+        </View>
+      )}
+
+      {/* Circle chip — hidden for private circles */}
+      {bet.circle && !isPrivateCircleName(bet.circle.name) && (
+        <View
+          style={{
+            backgroundColor: Colors.surface,
+            borderRadius: 8,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+            alignSelf: "flex-start",
+            marginBottom: 10,
+          }}
+        >
+          <Text style={{ color: Colors.text.secondary, fontSize: 12 }}>
+            {bet.circle.emoji} {bet.circle.name}
           </Text>
         </View>
       )}

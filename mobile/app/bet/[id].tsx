@@ -18,6 +18,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { Colors, resolutionColors, betTypeColors } from "@/constants/colors";
 import { formatDistanceToNow, format } from "date-fns";
 import Toast from "react-native-toast-message";
+import { isPrivateCircleName } from "@/lib/circleDisplay";
 
 export default function BetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,6 +39,13 @@ export default function BetDetailScreen() {
   const options = bet?.options ?? [];
   const myEntry = bet?.sides?.find((s: any) => s.userId === user?.id);
   const canResolve = bet?.proposerId === user?.id || bet?.circle?.ownerId === user?.id;
+  const is1v1 = bet ? isPrivateCircleName(bet.circle?.name) : false;
+  const sidesByOption: Record<string, any> = {};
+  if (bet?.sides) {
+    for (const s of bet.sides) {
+      sidesByOption[s.option] = s;
+    }
+  }
 
   // Join bet mutation
   const joinMutation = useMutation({
@@ -175,7 +183,7 @@ export default function BetDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={26} color={Colors.text.primary} />
           </TouchableOpacity>
-          {bet.circle && (
+          {bet.circle && !isPrivateCircleName(bet.circle.name) && (
             <TouchableOpacity
               onPress={() => router.push(`/circle/${bet.circle.id}`)}
               style={{
@@ -309,16 +317,24 @@ export default function BetDetailScreen() {
             const isWinner = bet.resolvedOption === option;
             const myChoice = myEntry?.option === option;
 
+            const takenBySide = sidesByOption[option];
+            const takenByOther = takenBySide && takenBySide.userId !== user?.id;
+            const lockedInPrivate = is1v1 && !!takenByOther && !myEntry;
+            const isMyAvailableSideInPrivate = is1v1 && !takenBySide && !myEntry;
+            const isClickable = !myEntry && bet.resolution === "pending" && !lockedInPrivate && !joinMutation.isPending;
+
             return (
               <TouchableOpacity
                 key={option}
-                onPress={() => bet.resolution === "pending" && !myEntry && pickSide(option)}
-                disabled={!!myEntry || bet.resolution !== "pending" || joinMutation.isPending}
+                onPress={() => isClickable && pickSide(option)}
+                disabled={!isClickable}
                 style={{
                   backgroundColor: isWinner
                     ? `${Colors.win}20`
                     : myChoice
                     ? `${Colors.primary}20`
+                    : lockedInPrivate
+                    ? Colors.border
                     : Colors.surface,
                   borderRadius: 14,
                   padding: 16,
@@ -327,9 +343,12 @@ export default function BetDetailScreen() {
                     ? Colors.win
                     : myChoice
                     ? Colors.primary
+                    : isMyAvailableSideInPrivate
+                    ? Colors.primary
                     : Colors.border,
                   overflow: "hidden",
                   position: "relative",
+                  opacity: lockedInPrivate ? 0.5 : 1,
                 }}
               >
                 {/* Progress bar */}
@@ -363,17 +382,29 @@ export default function BetDetailScreen() {
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: Colors.text.secondary, fontWeight: "600" }}>
-                      {count} {count === 1 ? "player" : "players"}
-                    </Text>
-                    <Text style={{ color: Colors.text.muted, fontSize: 12 }}>
-                      {pct.toFixed(0)}%
-                    </Text>
+                    {lockedInPrivate ? (
+                      <Text style={{ color: Colors.text.muted, fontWeight: "600", fontSize: 13 }}>
+                        Taken · {takenBySide.user?.name ?? "Taken"}
+                      </Text>
+                    ) : isMyAvailableSideInPrivate ? (
+                      <Text style={{ color: Colors.primary, fontWeight: "700", fontSize: 13 }}>
+                        Your side →
+                      </Text>
+                    ) : (
+                      <>
+                        <Text style={{ color: Colors.text.secondary, fontWeight: "600" }}>
+                          {count} {count === 1 ? "player" : "players"}
+                        </Text>
+                        <Text style={{ color: Colors.text.muted, fontSize: 12 }}>
+                          {pct.toFixed(0)}%
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </View>
 
                 {/* Who picked this */}
-                {bet.sides?.filter((s: any) => s.option === option).length > 0 && (
+                {!is1v1 && bet.sides?.filter((s: any) => s.option === option).length > 0 && (
                   <View style={{ flexDirection: "row", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
                     {bet.sides
                       .filter((s: any) => s.option === option)
